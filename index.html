@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GPverse OnAir</title>
+<link rel="icon" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#04060b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: console di regia a fasce — trasporto in alto, tre colonne sorgenti, mixer orizzontale in basso */
+:root{
+  --bg:#04060b; --panel:#080d17; --panel2:#0c1322; --line:#15233a; --line2:#1f3352;
+  --cyan:#3ae8ff; --cyan-d:#1597b0; --violet:#8d7bff; --violet-d:#5a4bd1;
+  --text:#d5f4ff; --dim:#6f87a6; --faint:#3a4c66;
+  --rec:#ff3d6e; --warn:#ffc04a; --ok:#3affb0;
+  --f-display:'Orbitron','Exo 2',system-ui,sans-serif;
+  --f-body:'Exo 2',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,'DejaVu Sans Mono',monospace;
+  --glow:0 0 12px rgba(58,232,255,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.45 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:max(12px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-bottom,0px));
+  background-image:radial-gradient(1200px 500px at 50% -200px,rgba(141,123,255,.10),transparent 70%),radial-gradient(900px 400px at 100% 100%,rgba(58,232,255,.06),transparent 70%);
+  background-attachment:fixed}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;padding:8px 12px;font-weight:600;letter-spacing:.02em;transition:border-color .15s,box-shadow .15s,background .15s}
+button:hover{border-color:var(--cyan-d);box-shadow:var(--glow)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.kbd{font:600 11px var(--f-mono);color:var(--dim);border:1px solid var(--line2);border-radius:4px;padding:1px 5px;margin-left:6px;white-space:nowrap}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+
+/* Boot */
+.boot{position:fixed;inset:0;z-index:50;background:var(--bg);display:grid;place-items:center;padding:24px}
+.boot-in{max-width:520px;width:100%;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
+.boot img{width:min(420px,90%);border-radius:14px;mask-image:radial-gradient(ellipse at center,#000 55%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse at center,#000 55%,transparent 75%)}
+.boot h1{font:900 44px var(--f-display);margin:0;letter-spacing:.06em;color:var(--cyan);text-shadow:0 0 18px rgba(58,232,255,.55)}
+.boot p{margin:0;color:var(--dim);max-width:42ch}
+.btn-big{font:700 16px var(--f-display);letter-spacing:.12em;padding:16px 28px;border-radius:12px;background:linear-gradient(180deg,rgba(58,232,255,.18),rgba(141,123,255,.12));border-color:var(--cyan-d);box-shadow:var(--glow)}
+.err{color:#fff;background:rgba(255,61,110,.18);border:1px solid var(--rec);border-radius:10px;padding:10px 14px;font-size:15px}
+
+/* Header */
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.top .logo{height:46px;width:84px;object-fit:cover;object-position:50% 38%;border-radius:8px;border:1px solid var(--line)}
+.brand{display:flex;flex-direction:column;line-height:1}
+.brand small{font:700 10px var(--f-display);letter-spacing:.32em;color:var(--violet)}
+.brand b{font:900 26px var(--f-display);letter-spacing:.06em;color:var(--cyan);text-shadow:0 0 14px rgba(58,232,255,.5)}
+.ver{font:700 12px var(--f-mono);padding:4px 9px;border-radius:999px;color:var(--violet);border-color:var(--violet-d)}
+.top .sp{flex:1}
+.pill{font:700 11px var(--f-display);letter-spacing:.14em;padding:6px 10px;border-radius:999px;border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
+.pill.on{color:var(--ok);border-color:rgba(58,255,176,.4)}
+.pill.bad{color:var(--rec);border-color:rgba(255,61,110,.5)}
+.pill.rec{color:#fff;background:var(--rec);border-color:var(--rec);box-shadow:0 0 16px rgba(255,61,110,.6);animation:pulse 1.2s ease-in-out infinite}
+.pill.hold{color:#111;background:var(--warn);border-color:var(--warn)}
+.pill.pre{color:#04060b;background:var(--cyan);border-color:var(--cyan)}
+@keyframes pulse{50%{box-shadow:0 0 4px rgba(255,61,110,.3)}}
+@media (prefers-reduced-motion:reduce){.pill.rec{animation:none}}
+
+/* Transport */
+.transport{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:stretch;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.tc{font:700 clamp(34px,6vw,54px)/1 var(--f-mono);letter-spacing:.02em;color:var(--cyan);text-shadow:0 0 16px rgba(58,232,255,.45);padding:10px 16px;border-radius:10px;background:#02040a;border:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;font-variant-numeric:tabular-nums}
+.tc small{font:600 11px var(--f-body);letter-spacing:.1em;color:var(--dim);text-shadow:none;margin-top:6px}
+.tbtns{display:flex;gap:10px;flex-wrap:wrap}
+.tbtns button{flex:1 1 160px;min-height:62px;font:700 14px var(--f-display);letter-spacing:.08em}
+#recBtn{background:linear-gradient(180deg,rgba(255,61,110,.28),rgba(255,61,110,.12));border-color:var(--rec);color:#fff}
+#recBtn.paused{background:linear-gradient(180deg,rgba(255,192,74,.25),rgba(255,192,74,.1));border-color:var(--warn)}
+#retakeBtn{border-color:var(--violet-d);color:#e6e1ff}
+#stopBtn{flex:0 1 140px}
+
+/* Deck */
+.deck{display:grid;grid-template-columns:1fr 1.25fr 1.25fr;gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card h2{margin:0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet);display:flex;align-items:center;gap:8px}
+.card h2 .sp{flex:1}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row button{padding:8px 10px}
+.main-act{flex:1;background:linear-gradient(180deg,rgba(58,232,255,.16),rgba(58,232,255,.05));border-color:var(--cyan-d)}
+.fname{background:#02040a;border:1px dashed var(--line2);border-radius:8px;padding:10px;color:var(--dim);font-size:14px;overflow-wrap:anywhere}
+.fname.set{border-style:solid;color:var(--text)}
+.list{list-style:none;margin:0;padding:4px;background:#02040a;border:1px solid var(--line);border-radius:8px;min-height:120px;max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+.list li{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:14px;min-width:0}
+.list li:hover{background:var(--panel2)}
+.list li .n{font:700 11px var(--f-mono);color:var(--dim);width:26px;flex:none}
+.list li .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.list li .ops{display:flex;gap:2px;flex:none;opacity:.55}
+.list li:hover .ops{opacity:1}
+.list li .ops button{padding:2px 6px;font-size:12px;border-radius:5px;background:transparent;border-color:transparent}
+.list li.cur{outline:1px solid var(--line2)}
+.list li.next .n{color:var(--cyan)}
+.list li.play{background:rgba(58,232,255,.12);color:#fff}
+.list li.play .n{color:var(--cyan)}
+.list .empty{color:var(--faint);cursor:default;padding:18px 10px;text-align:center;justify-content:center;white-space:normal}
+.list .empty:hover{background:none}
+.prog{height:4px;background:#02040a;border-radius:2px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--violet))}
+.note{font-size:12.5px;color:var(--dim)}
+.tag{font:700 10px var(--f-display);letter-spacing:.14em;color:var(--warn)}
+
+/* Mixer */
+.mixer{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.mixer h2{margin:0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet)}
+.strips{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.strip{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.strip .h{display:flex;align-items:center;gap:8px}
+.strip .h b{font:700 11px var(--f-display);letter-spacing:.16em;flex:1}
+.strip .v{font:600 12px var(--f-mono);color:var(--dim);font-variant-numeric:tabular-nums}
+.meter{height:8px;border-radius:4px;background:#02040a;overflow:hidden;position:relative}
+.meter i{position:absolute;inset:0 auto 0 0;width:0;background:linear-gradient(90deg,var(--ok) 0%,var(--ok) 65%,var(--warn) 82%,var(--rec) 100%);background-size:var(--mw,300px) 100%}
+input[type=range]{width:100%;accent-color:var(--cyan);height:26px}
+.mute{padding:3px 8px;font-size:11px;font-family:var(--f-display);letter-spacing:.1em}
+.mute[aria-pressed=true]{background:var(--rec);border-color:var(--rec);color:#fff}
+
+/* Footer */
+.keys{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--dim);font-size:12.5px}
+.keys span{white-space:nowrap}
+.foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--faint);font-size:12px}
+
+/* Modals */
+.modal{position:fixed;inset:0;z-index:40;background:rgba(2,4,9,.78);backdrop-filter:blur(4px);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet{width:min(760px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:14px;box-shadow:0 0 40px rgba(58,232,255,.12)}
+.sheet h3{margin:0;font:700 16px var(--f-display);letter-spacing:.12em;color:var(--cyan);display:flex;align-items:center;gap:10px}
+.sheet h3 .sp{flex:1}
+.x{padding:4px 10px}
+.hold-big{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;font:700 18px var(--f-display);letter-spacing:.06em}
+.hold-big output{font:700 46px var(--f-mono);color:var(--warn);min-width:3.2ch;text-align:center;font-variant-numeric:tabular-nums}
+.hold-big button{font-size:26px;width:56px;height:56px;padding:0;border-radius:50%}
+canvas.wave{width:100%;height:110px;background:#02040a;border:1px solid var(--line);border-radius:10px;display:block}
+.hold-info{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;color:var(--dim);font-size:13.5px}
+.hold-info b{color:var(--text);font-family:var(--f-mono)}
+.acts{display:flex;gap:10px;flex-wrap:wrap}
+.acts button{flex:1 1 200px;min-height:52px;font:700 14px var(--f-display);letter-spacing:.08em}
+.acts .go{background:linear-gradient(180deg,rgba(58,232,255,.22),rgba(58,232,255,.06));border-color:var(--cyan)}
+.danger{border-color:rgba(255,61,110,.6);color:#ffc2d1}
+.form{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px 14px;align-items:center}
+.form label{color:var(--dim);font-size:14px}
+.form input[type=number],.form select,.sess input{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%}
+.sess{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.sess li{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--panel2)}
+.sess li.sel{border-color:var(--cyan-d);box-shadow:var(--glow)}
+.sess .meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--dim);font-size:13px;font-family:var(--f-mono)}
+.exp{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+.exp .strips{grid-template-columns:repeat(4,minmax(0,1fr))}
+.bar{height:10px;border-radius:5px;background:#02040a;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--violet));transition:width .2s}
+.dl{display:inline-flex;align-items:center;gap:8px;font:700 14px var(--f-display);letter-spacing:.08em;color:var(--bg);background:var(--cyan);padding:12px 18px;border-radius:10px;text-decoration:none;box-shadow:var(--glow)}
+.cl{display:flex;flex-direction:column;gap:14px}
+.cl article{border-left:2px solid var(--violet-d);padding-left:12px}
+.cl h4{margin:0 0 4px;font:700 14px var(--f-display);letter-spacing:.08em}
+.cl h4 span{font:600 12px var(--f-mono);color:var(--dim);margin-left:8px}
+.cl ul{margin:0;padding-left:18px;color:var(--text);font-size:14px}
+.cl .soon{border-left-color:var(--faint);color:var(--dim)}
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:var(--panel2);border:1px solid var(--cyan-d);box-shadow:var(--glow);padding:10px 16px;border-radius:10px;font-size:14px;max-width:min(560px,calc(100% - 32px));text-align:center}
+
+/* Mixer: EQ */
+.strip .h .rst{padding:2px 7px;font-size:12px}
+.eq{border-top:1px solid var(--line);padding-top:6px}
+.eq summary{cursor:pointer;font:600 11px var(--f-display);letter-spacing:.14em;color:var(--dim);list-style:none}
+.eq summary::-webkit-details-marker{display:none}
+.eq summary::before{content:'▸ ';color:var(--violet)}
+.eq[open] summary::before{content:'▾ '}
+.knobs{display:grid;grid-template-columns:auto minmax(0,1fr) 4.6em;gap:2px 8px;align-items:center;margin-top:6px}
+.knobs label{font:600 11px var(--f-body);color:var(--dim);letter-spacing:.04em}
+.knobs output{font:600 11px var(--f-mono);color:var(--text);text-align:right;font-variant-numeric:tabular-nums}
+.knobs input[type=range]{height:20px}
+.knobs .chk{grid-column:2/4;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text)}
+.eq .def{margin-top:8px;width:100%;font-size:12px;padding:6px}
+.fad{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;font:600 11px var(--f-body);color:var(--dim)}
+
+/* Teleprompter */
+.prompter{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.pt-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pt-bar h2{margin:0 8px 0 0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet)}
+.pt-bar .sp{flex:1}
+.pt-bar button{padding:6px 10px;font-size:13px}
+.pt-bar .grp{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;padding:2px 6px;font-size:12px;color:var(--dim)}
+.pt-bar .grp output{font:700 13px var(--f-mono);color:var(--text);min-width:2ch;text-align:center}
+.pt-bar .grp button{padding:2px 8px;border-color:transparent;background:transparent}
+.pt-bar button[aria-pressed=true]{border-color:var(--cyan);color:var(--cyan)}
+.pt-view{position:relative;height:clamp(220px,40vh,480px);overflow-y:auto;background:#000;border:1px solid var(--line);border-radius:10px;scrollbar-width:thin}
+.pt-text{padding:0 6%;font:600 var(--pt-size,42px)/1.45 var(--f-body);color:#f2fbff;overflow-wrap:break-word}
+.pt-text p{margin:0 0 .6em}
+.pt-text.mirror{transform:scaleX(-1)}
+.pt-text .pad-top{height:30%}
+.cue{display:inline-block;font:700 .5em var(--f-display);letter-spacing:.12em;vertical-align:middle;padding:.25em .6em;border-radius:6px;border:1px solid var(--violet-d);color:var(--violet);background:rgba(141,123,255,.1);margin:0 .2em}
+.cue[data-fired="1"]{opacity:.45}
+.cue.flash{background:var(--cyan);color:#000;border-color:var(--cyan);opacity:1}
+.pt-line{position:sticky;top:30%;height:0;border-top:2px solid rgba(255,192,74,.7);z-index:2;pointer-events:none;margin-bottom:-2px}
+.pt-line::before{content:'▶';position:absolute;left:6px;top:-.72em;color:var(--warn);font-size:14px}
+.pt-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;color:var(--dim)}
+.pt-edit{display:flex;flex-direction:column;gap:8px}
+.pt-edit textarea{width:100%;min-height:clamp(220px,40vh,480px);background:#02040a;color:var(--text);border:1px solid var(--line2);border-radius:10px;padding:12px;font:16px/1.5 var(--f-body);resize:vertical}
+.pt-edit .row button{font-size:12px;padding:5px 9px}
+
+/* Ascolto */
+.listen{display:flex;gap:8px;flex-wrap:wrap}
+.listen button{flex:1 1 180px}
+.listen #lsStop{flex:0 0 64px}
+.exp .strips{grid-template-columns:repeat(2,minmax(0,1fr))}
+canvas.wave{cursor:pointer}
+.pv{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;background:#02040a;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.pv button{width:44px;height:40px;padding:0;font-size:16px}
+.pv output{font:600 12px var(--f-mono);color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Palco: teleprompter + video */
+.stage{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px;align-items:start}
+.stage.no-pt{grid-template-columns:minmax(0,1fr)}
+.stage.no-pt .vcard{max-width:640px}
+.vcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.vcard h2{margin:0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet);display:flex;align-items:center;gap:8px}
+.vcard h2 .sp{flex:1}
+.vbox{position:relative;aspect-ratio:16/9;max-width:100%;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.vbox canvas{width:100%;height:100%;display:block}
+.vbox .vmsg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:var(--dim);font-size:14px}
+.vbox .vrec{position:absolute;top:8px;left:8px;font:700 10px var(--f-display);letter-spacing:.14em;color:#fff;background:var(--rec);padding:3px 7px;border-radius:5px}
+.vcard .knobs{grid-template-columns:auto minmax(0,1fr) 3.6em}
+.vcard .row label{display:flex;align-items:center;gap:6px;font-size:13px}
+.vcard input[type=color]{width:34px;height:26px;border:1px solid var(--line2);border-radius:6px;background:none;padding:0}
+.switch[aria-pressed=true]{border-color:var(--cyan);color:var(--cyan)}
+
+.keylist{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center}
+.keylist span{font-size:14px;color:var(--text)}
+.keylist button{min-width:110px;font-family:var(--f-mono)}
+.keylist button.wait{border-color:var(--warn);color:var(--warn)}
+canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--line);border-radius:10px;display:block}
+#ptStart{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:5px 8px;font-size:13px}
+
+/* Controllo dispositivi */
+.dev{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.dev section{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--panel2)}
+.dev h4{margin:0;font:700 12px var(--f-display);letter-spacing:.18em;color:var(--violet);display:flex;align-items:center;gap:8px}
+.dev h4 .sp{flex:1}
+.dev select{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%}
+.dev video{width:100%;max-width:360px;aspect-ratio:16/9;background:#000;border-radius:8px;border:1px solid var(--line);object-fit:cover}
+.st{font:700 10px var(--f-display);letter-spacing:.12em;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--dim)}
+.st.ok{color:var(--ok);border-color:rgba(58,255,176,.4)}
+.st.bad{color:var(--rec);border-color:rgba(255,61,110,.5)}
+.st.warn{color:var(--warn);border-color:rgba(255,192,74,.5)}
+.dev .why{font-size:13px;color:var(--warn)}
+.pill.click{cursor:pointer}
+
+@media (max-width:980px){.stage{grid-template-columns:1fr}}
+@media (max-width:980px){.deck{grid-template-columns:1fr 1fr}.deck .card:first-child{grid-column:1/-1}.strips{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){
+  .deck{grid-template-columns:1fr}
+  .transport{grid-template-columns:1fr}
+  .tbtns button{flex:1 1 45%;min-height:56px}
+  .top .logo{display:none}
+  .form{grid-template-columns:1fr}
+  .strips,.exp .strips{grid-template-columns:1fr}
+  .tbtns .kbd{display:none}
+  .keys{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="boot" class="boot">
+  <div class="boot-in">
+    <img src="assets/logo.jpg" alt="GPverse">
+    <h1>OnAir</h1>
+    <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
+    <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
+    <div id="bootErr" class="err" hidden></div>
+    <span class="ver" id="bootVer">V2.4.0</span>
+  </div>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <img class="logo" src="assets/logo.jpg" alt="">
+    <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V2.4.0</button>
+    <span class="sp"></span>
+    <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
+    <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
+    <span class="pill" id="statePill">PRONTO</span>
+    <button id="installBtn" hidden>⤓ Installa app</button>
+    <button id="devBtn">Dispositivi</button>
+    <button id="tpBtn" aria-pressed="true">Teleprompter</button>
+    <button id="sessBtn">Sessioni</button>
+    <button id="setBtn">Impostazioni</button>
+  </header>
+
+  <section class="transport">
+    <div class="tc"><span id="tc">00:00:00.0</span><small id="tcSub">Nessuna registrazione in corso</small></div>
+    <div class="tbtns">
+      <button id="recBtn">● REGISTRA<span class="kbd">Spazio</span></button>
+      <button id="retakeBtn" disabled>↶ RE-TAKE<span class="kbd" data-act="retake">R</span></button>
+      <button id="stopBtn" disabled>■ TERMINA</button>
+    </div>
+  </section>
+
+  <div class="stage" id="stage">
+  <section class="prompter" id="prompter">
+    <div class="pt-bar">
+      <h2>TELEPROMPTER</h2>
+      <button id="ptRun" title="Avvia o ferma lo scorrimento">⏯ Scorri<span class="kbd" data-act="tpRun">P</span></button>
+      <select id="ptStart" aria-label="Quando parte il testo" title="Quando parte lo scorrimento"><option value="intro">Parte dopo la sigla</option><option value="rec">Parte con la registrazione</option><option value="manual">Parte a mano</option></select>
+      <span class="grp" title="Velocità (frecce su e giù)">Velocità <button id="ptSlow" aria-label="Più lento">−</button><output id="ptSpeed">6</output><button id="ptFast" aria-label="Più veloce">+</button></span>
+      <span class="grp" title="Dimensione del testo">Testo <button id="ptSmall" aria-label="Testo più piccolo">A−</button><button id="ptBig" aria-label="Testo più grande">A+</button></span>
+      <button id="ptAuto" aria-pressed="true" title="I segnali nel testo lanciano sigla, sottofondo e capitoli">Segnali automatici</button>
+      <button id="ptMirror" aria-pressed="false" title="Testo a specchio, per i teleprompter con vetro">Specchio</button>
+      <span class="sp"></span>
+      <button id="ptEditBtn">✎ Modifica testo</button>
+      <button id="ptLoad">📂 Carica .txt</button>
+    </div>
+    <div class="pt-view" id="ptView">
+      <div class="pt-line"></div>
+      <div class="pt-text" id="ptText"></div>
+      <div class="pt-empty" id="ptEmpty" hidden><div><p>Nessun testo. Incolla la scaletta o il testo della puntata con <b>✎ Modifica testo</b>, oppure carica un file .txt.</p><p class="note">Nel testo puoi mettere i segnali [SIGLA], [SOTTOFONDO], [CAPITOLO]: quando la riga di lettura li raggiunge, OnAir li lancia da solo.</p></div></div>
+    </div>
+    <div class="pt-edit" id="ptEditBox" hidden>
+      <div class="row"><span class="note">Inserisci un segnale nel punto del cursore:</span>
+        <button data-ins="[SIGLA]">[SIGLA]</button><button data-ins="[SOTTOFONDO]">[SOTTOFONDO]</button><button data-ins="[STOP SOTTOFONDO]">[STOP SOTTOFONDO]</button><button data-ins="[CAPITOLO]">[CAPITOLO]</button><button data-ins="[CAPITOLO 2]">[CAPITOLO n]</button><button data-ins="[PAUSA]">[PAUSA]</button></div>
+      <textarea id="ptArea" aria-label="Testo del teleprompter" placeholder="Scrivi o incolla qui il testo della puntata…"></textarea>
+      <div class="row"><button id="ptSave" class="main-act">Salva e torna alla lettura</button><button id="ptCancel">Annulla</button></div>
+      <p class="note">[SIGLA] fa partire la sigla · [SOTTOFONDO] avvia il sottofondo · [STOP SOTTOFONDO] lo mette in pausa · [CAPITOLO] lancia il prossimo capitolo · [CAPITOLO 2] lancia il capitolo 2 · [STOP CAPITOLO] lo ferma · [PAUSA] ferma lo scorrimento del testo.</p>
+    </div>
+  </section>
+
+  <section class="vcard" id="vcard">
+    <h2>VIDEO <span class="sp"></span><button class="switch" id="vOn" aria-pressed="true" title="Registra anche il video">Registra video</button></h2>
+    <div class="vbox"><canvas id="vCanvas" width="1280" height="720"></canvas><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
+    <div class="knobs">
+      <label for="vThr">Contorni</label><input type="range" id="vThr" min="0.02" max="0.6" step="0.01"><output id="vThrO"></output>
+      <label for="vGl">Disturbo</label><input type="range" id="vGl" min="0" max="1" step="0.01"><output id="vGlO"></output>
+    </div>
+    <div class="row">
+      <label>Colore <input type="color" id="vCol" value="#ffd400"></label>
+      <button class="switch" id="vFx" aria-pressed="true" title="Spento: vedi e registri la webcam senza effetto">Effetto</button>
+      <button class="switch" id="vMirror" aria-pressed="false">Specchio</button>
+      <select id="vRes" aria-label="Risoluzione"><option value="540">540p (leggero)</option><option value="720">720p</option><option value="1080">1080p</option></select>
+    </div>
+    <div class="note" id="vFps" style="font-family:var(--f-mono)">—</div>
+    <div class="note" id="vWarn" style="color:var(--warn)" hidden></div>
+    <p class="note" style="margin:0">Il video si registra con l'effetto già applicato. Tieni OnAir in primo piano mentre registri: se la finestra è nascosta il browser rallenta il video.</p>
+  </section>
+  </div>
+
+  <main class="deck">
+    <section class="card" id="cardIntro">
+      <h2>SIGLA <span class="sp"></span><span class="kbd" data-act="intro">S</span></h2>
+      <div class="fname" id="introName">Nessuna sigla caricata</div>
+      <div class="prog"><i id="introProg"></i></div>
+      <div class="row">
+        <button id="introLoad" title="Scegli il file della sigla">📂 Scegli</button>
+        <button id="introPlay" class="main-act">▶ PLAY</button>
+        <button id="introStop">■</button>
+      </div>
+      <p class="note">Durante la sigla il sottofondo resta spento: lo fai partire tu alla fine, con B.</p>
+    </section>
+
+    <section class="card" id="cardBg">
+      <h2>SOTTOFONDO <span class="sp"></span><span class="tag" id="bgTag"></span><span class="kbd" data-act="bg">B</span></h2>
+      <ul class="list" id="bgList"></ul>
+      <div class="prog"><i id="bgProg"></i></div>
+      <div class="row">
+        <button id="bgAdd" title="Aggiungi brani">＋ Brani</button>
+        <button id="bgPrev" title="Brano precedente">⏮</button>
+        <button id="bgPlay" class="main-act">⏯ PLAY / PAUSA</button>
+        <button id="bgNext" title="Brano successivo">⏭</button>
+      </div>
+    </section>
+
+    <section class="card" id="cardCap">
+      <h2>CAPITOLI <span class="sp"></span><span class="kbd" data-act="cap">Invio</span><span class="kbd">1–9</span></h2>
+      <ul class="list" id="capList"></ul>
+      <div class="prog"><i id="capProg"></i></div>
+      <div class="row">
+        <button id="capAdd" title="Aggiungi capitoli">＋ Capitoli</button>
+        <button id="capPrev" title="Sposta il prossimo capitolo indietro">⏮</button>
+        <button id="capPlay" class="main-act">▶ LANCIA PROSSIMO</button>
+        <button id="capStop" title="Ferma il capitolo">■</button>
+      </div>
+      <p class="note">Mentre suona un capitolo il sottofondo si ferma, poi riparte da dove era rimasto.</p>
+    </section>
+  </main>
+
+  <section class="mixer">
+    <h2>MIXER IN CUFFIA</h2>
+    <div class="strips" id="liveStrips"></div>
+    <p class="note">Questi livelli valgono per l'ascolto e sono il punto di partenza del mix finale. Dopo la registrazione li ritocchi in Sessioni, con l'anteprima, prima di esportare. ↺ riporta la fonte al suo livello predefinito, che imposti con ★ dentro «Gain ed EQ». Mute spegne solo l'ascolto in cuffia.</p>
+  </section>
+
+  <div class="keys" id="keysLegend"></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.4.0</span></span><span id="footInfo"></span></div>
+</div>
+
+<!-- Pausa / Re-take -->
+<div class="modal" id="holdModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="holdTitle">
+    <h3 id="holdTitle">RE-TAKE</h3>
+    <div class="hold-big">
+      <span>Torna indietro di</span>
+      <button id="holdMinus" aria-label="Meno secondi">−</button>
+      <output id="holdN">5</output>
+      <button id="holdPlus" aria-label="Più secondi">+</button>
+      <span>secondi</span>
+    </div>
+    <input type="range" id="holdRange" min="0" max="60" step="0.5" value="5" aria-label="Secondi da tagliare">
+    <canvas class="wave" id="holdWave" width="1400" height="220" title="Clicca per ascoltare da quel punto"></canvas>
+    <div class="listen">
+      <button id="lsBefore">▶ Ascolta prima del taglio</button>
+      <button id="lsCut">▶ Ascolta la parte da tagliare</button>
+      <button id="lsStop" aria-label="Ferma ascolto">■</button>
+    </div>
+    <p class="note" style="margin:0">Clicca sull'onda per riascoltarti da quel punto. Qui senti solo la voce; la musica torna al punto giusto quando riparti.</p>
+    <div class="hold-info">
+      <span>Ti eri fermato a <b id="holdFrom">00:00:00.0</b></span>
+      <span>Riparti da <b id="holdTo">00:00:00.0</b></span>
+      <span id="holdPre">Prima di ripartire senti gli ultimi 3 s</span>
+    </div>
+    <div class="acts">
+      <button class="go" id="holdGo">RIPRENDI DA QUI<span class="kbd">Invio</span></button>
+      <button class="danger" id="holdEnd">TERMINA REGISTRAZIONE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Controllo dispositivi -->
+<div class="modal" id="devModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="devTitle">
+    <h3 id="devTitle">CONTROLLO DISPOSITIVI <span class="sp"></span><button id="devRefresh" title="Cerca di nuovo microfoni, uscite e webcam">↻ Ricarica elenco</button></h3>
+    <p class="why" id="devFile" hidden style="margin:0"></p>
+    <div class="dev">
+      <section>
+        <h4>MICROFONO <span class="sp"></span><span class="st" id="dMicSt">…</span></h4>
+        <div class="row" style="flex-wrap:nowrap"><select id="dMic" aria-label="Microfono" style="flex:1;min-width:0"></select><button id="dMicFind" title="Parla: OnAir prova tutti i microfoni e sceglie quello che ti sente meglio">🔍 Trova il microfono giusto</button></div>
+        <span class="note" id="dMicFound" hidden></span>
+        <div class="meter"><i id="dMicMeter"></i></div>
+        <div class="fad"><label for="dMicGain">Guadagno ingresso</label><div class="row" style="flex-wrap:nowrap"><input type="range" id="dMicGain" min="0" max="30" step="1" style="flex:1"><output id="dMicGainO" class="v">+0 dB</output></div></div>
+        <span class="note">Parla con la voce normale della puntata: <b id="dMicLvl">…</b></span>
+      </section>
+      <section>
+        <h4>USCITA AUDIO (CUFFIE) <span class="sp"></span><span class="st" id="dOutSt">…</span></h4>
+        <select id="dOut" aria-label="Uscita audio"></select>
+        <div class="row"><button id="dOutTest">▶ Prova suono</button><span class="note" id="dOutNote"></span></div>
+      </section>
+      <section>
+        <h4>WEBCAM <span class="sp"></span><span class="st" id="dCamSt">…</span></h4>
+        <select id="dCam" aria-label="Webcam"></select>
+        <video id="dCamPrev" muted playsinline autoplay></video>
+        <span class="why" id="dCamWhy" hidden></span>
+      </section>
+    </div>
+    <div class="acts"><button class="go" id="devGo">ENTRA IN STUDIO</button></div>
+  </div>
+</div>
+
+<!-- Sessioni -->
+<div class="modal" id="sessModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="sessTitle">
+    <h3 id="sessTitle">SESSIONI <span class="sp"></span><button class="x" data-close="sessModal">Chiudi</button></h3>
+    <p class="note">Ogni registrazione resta salvata in questo browser: puoi rifare il mix e riesportarla quando vuoi.</p>
+    <ul class="sess" id="sessList"></ul>
+  </div>
+</div>
+
+<!-- Impostazioni -->
+<div class="modal" id="setModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="setTitle">
+    <h3 id="setTitle">IMPOSTAZIONI <span class="sp"></span><button class="x" data-close="setModal">Chiudi</button></h3>
+    <div class="form">
+      <label>Microfono, uscita audio e webcam</label><button id="setDev">Apri controllo dispositivi</button>
+      <label for="setRetake">Re-take: secondi proposti</label><input type="number" id="setRetake" min="1" max="60" step="0.5">
+      <label for="setPre">Pre-ascolto prima di ripartire (s)</label><input type="number" id="setPre" min="0" max="10" step="0.5">
+      <label for="setNs">Riduzione rumore del browser</label><select id="setNs"><option value="0">Spenta (consigliato a casa)</option><option value="1">Accesa (utile in viaggio)</option></select>
+    </div>
+    <h3 style="font-size:13px">SCORCIATOIE DA TASTIERA</h3>
+    <p class="note" style="margin:0">Clicca il tasto accanto a un'azione e premi quello nuovo. Se è già usato, i due tasti si scambiano. I tasti 1–9 restano ai capitoli.</p>
+    <div class="keylist" id="keyList"></div>
+    <div class="row"><button id="keyReset">Ripristina tasti predefiniti</button></div>
+  </div>
+</div>
+
+<!-- Novità -->
+<div class="modal" id="clModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="clTitle">
+    <h3 id="clTitle">NOVITÀ <span class="sp"></span><button class="x" data-close="clModal">Chiudi</button></h3>
+    <div class="cl" id="clBody"></div>
+  </div>
+</div>
+
+<input type="file" id="fileScript" accept=".txt,.md,text/plain" hidden>
+<input type="file" id="fileIntro" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" hidden>
+<input type="file" id="fileBg" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple hidden>
+<input type="file" id="fileCap" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple hidden>
+<div class="toast" id="toast" hidden></div>
+
+<script src="lib/lame.min.js"></script>
+<script src="lib/webm-muxer.js"></script>
+<video id="camVideo" muted playsinline autoplay hidden></video>
+<script src="onair.js"></script>
+</body>
+</html>
