@@ -1,4 +1,4 @@
-# GPverse OnAir V2.3.2 — Come si usa
+# GPverse OnAir V2.5.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -42,4 +42,6 @@ Premi **✎ Modifica testo** (o carica un .txt). Nel testo puoi mettere i segnal
 Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apre **Sessioni**: premi ▶ per l'anteprima, ritocchi livelli ed EQ mentre ascolti, scegli MP3 o WAV e premi **ESPORTA**. Il file è già pronto per Spotify.
 
 ## Video per YouTube
+**Inquadratura con green screen:** nel riquadro VIDEO premi «🎯 Scegli il verde» e clicca sul telo, poi «Green screen». Se si vede qualcosa oltre il telo, premi «✂ Scegli area» e trascina un rettangolo attorno a te e al telo: il resto diventa nero. Con «Ingrandisci area» l'area riempie lo schermo.
+
 Il video si registra con l'effetto già applicato (regoli contorni, disturbo e colore nel riquadro VIDEO). In Sessioni scegli **Video WebM per YouTube** come formato. Tieni OnAir in primo piano mentre registri. Serve Chrome o Edge (Firefox registra solo l'audio se non supporta il video).

@@ -222,6 +222,10 @@ canvas.wave{cursor:pointer}
 .vbox canvas{width:100%;height:100%;display:block}
 .vbox .vmsg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:var(--dim);font-size:14px}
 .vbox .vrec{position:absolute;top:8px;left:8px;font:700 10px var(--f-display);letter-spacing:.14em;color:#fff;background:var(--rec);padding:3px 7px;border-radius:5px}
+.vbox.editing{cursor:crosshair;outline:2px solid var(--warn);outline-offset:-2px;touch-action:none}
+.varea{position:absolute;border:2px dashed var(--warn);box-shadow:0 0 0 9999px rgba(0,0,0,.55);pointer-events:none}
+.vhint{position:absolute;left:8px;right:8px;bottom:8px;font:600 12px var(--f-body);color:#111;background:var(--warn);padding:6px 10px;border-radius:6px;text-align:center;pointer-events:none}
+.kswatch{width:26px;height:26px;border-radius:6px;border:1px solid var(--line2);display:inline-block}
 .vcard .knobs{grid-template-columns:auto minmax(0,1fr) 3.6em}
 .vcard .row label{display:flex;align-items:center;gap:6px;font-size:13px}
 .vcard input[type=color]{width:34px;height:26px;border:1px solid var(--line2);border-radius:6px;background:none;padding:0}
@@ -271,7 +275,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V2.4.0</span>
+    <span class="ver" id="bootVer">V2.5.0</span>
   </div>
 </div>
 
@@ -279,7 +283,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V2.4.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V2.5.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -330,7 +334,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
 
   <section class="vcard" id="vcard">
     <h2>VIDEO <span class="sp"></span><button class="switch" id="vOn" aria-pressed="true" title="Registra anche il video">Registra video</button></h2>
-    <div class="vbox"><canvas id="vCanvas" width="1280" height="720"></canvas><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
+    <div class="vbox" id="vBox"><canvas id="vCanvas" width="1280" height="720"></canvas><div class="varea" id="vAreaBox" hidden></div><div class="vhint" id="vHint" hidden></div><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
     <div class="knobs">
       <label for="vThr">Contorni</label><input type="range" id="vThr" min="0.02" max="0.6" step="0.01"><output id="vThrO"></output>
       <label for="vGl">Disturbo</label><input type="range" id="vGl" min="0" max="1" step="0.01"><output id="vGlO"></output>
@@ -340,6 +344,19 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <button class="switch" id="vFx" aria-pressed="true" title="Spento: vedi e registri la webcam senza effetto">Effetto</button>
       <button class="switch" id="vMirror" aria-pressed="false">Specchio</button>
       <select id="vRes" aria-label="Risoluzione"><option value="540">540p (leggero)</option><option value="720">720p</option><option value="1080">1080p</option></select>
+    </div>
+    <div class="row">
+      <button id="vArea" title="Trascina sull'anteprima il rettangolo da tenere: fuori diventa nero">✂ Scegli area</button>
+      <button id="vAreaReset">Tutta l'inquadratura</button>
+      <button class="switch" id="vZoom" aria-pressed="false" title="Allarga l'area scelta a tutto lo schermo">Ingrandisci area</button>
+    </div>
+    <div class="row">
+      <button class="switch" id="vKey" aria-pressed="false" title="Il telo verde diventa nero">Green screen</button>
+      <button id="vPick" title="Clicca sul telo verde nell'anteprima per prenderne il colore">🎯 Scegli il verde</button>
+      <span class="kswatch" id="vKc" title="Colore del telo"></span>
+    </div>
+    <div class="knobs">
+      <label for="vTol">Tolleranza verde</label><input type="range" id="vTol" min="0.02" max="0.3" step="0.005"><output id="vTolO"></output>
     </div>
     <div class="note" id="vFps" style="font-family:var(--f-mono)">—</div>
     <div class="note" id="vWarn" style="color:var(--warn)" hidden></div>
@@ -393,7 +410,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </section>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.4.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.5.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->

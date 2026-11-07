@@ -7,6 +7,13 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V2.5.0 — 08/11/2026
+**Inquadratura e green screen (riquadro VIDEO)**
+- «✂ Scegli area»: trascini sull'anteprima il rettangolo da tenere; fuori diventa nero. Serve a nascondere quello che si vede oltre il telo. «Tutta l'inquadratura» lo toglie.
+- «Ingrandisci area»: l'area scelta riempie lo schermo, senza deformarsi.
+- «Green screen»: il telo verde diventa nero, così l'effetto disegna solo i tuoi contorni e non le pieghe del telo. «🎯 Scegli il verde» e un clic sul telo per prenderne il colore esatto; «Tolleranza verde» per regolare quanto verde togliere.
+- Funziona con l'effetto e con la webcam normale, sia in modalità grafica piena sia in modalità semplice. Le impostazioni restano salvate.
+
 ## V2.4.0 — 04/11/2026
 - OnAir online su GitHub Pages (https): si usa da tablet e smartphone Android senza il PC acceso.
 - Installabile come app (pulsante «⤓ Installa app» o menu di Chrome → «Installa app»).

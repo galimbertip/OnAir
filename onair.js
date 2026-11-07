@@ -3,9 +3,15 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '2.4.0' };
+const APP = { name: 'GPverse OnAir', version: '2.5.0' };
 
 const CHANGELOG = [
+  { v: '2.5.0', date: '08/11/2026', title: 'Inquadratura e green screen', items: [
+    'Video: «Scegli area» — trascini un rettangolo sull\'anteprima e tutto quello che sta fuori diventa nero (per nascondere ciò che va oltre il telo).',
+    'Video: «Ingrandisci area» allarga l\'area scelta a tutto lo schermo, senza deformarla.',
+    'Video: «Green screen» — il telo verde diventa nero, così l\'effetto disegna solo i tuoi contorni. «Scegli il verde» per cliccare sul telo e prenderne il colore; «Tolleranza verde» per regolarlo.',
+    'Area e green screen valgono sia con l\'effetto sia con la webcam normale, dal vivo e nella registrazione.'
+  ]},
   { v: '2.4.0', date: '04/11/2026', title: 'OnAir online e installabile', items: [
     'OnAir è online su un indirizzo https: si usa da tablet e smartphone Android senza il PC acceso.',
     'Si installa come app (pulsante «Installa app» o menu del browser → «Installa app» / «Aggiungi a schermata Home»).',
@@ -163,7 +169,7 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true } },
+  settings: { retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09 } },
   names: new Map()
 };
 async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); }
@@ -852,8 +858,14 @@ precision mediump float;
 varying vec2 v_uv;
 uniform sampler2D u_tex; uniform vec2 u_px; uniform vec2 u_scale; uniform vec2 u_off; uniform vec2 u_res;
 uniform float u_time; uniform float u_thr; uniform float u_gl; uniform float u_mirror; uniform float u_has; uniform float u_fx; uniform vec3 u_col;
+uniform vec4 u_mask; uniform vec4 u_view; uniform float u_key; uniform vec2 u_kc; uniform float u_tol;
 float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
-float lum(vec2 uv){ return dot(texture2D(u_tex, uv).rgb, vec3(0.299,0.587,0.114)); }
+vec2 cbcr(vec3 c){ return vec2(-0.1687*c.r - 0.3313*c.g + 0.5*c.b, 0.5*c.r - 0.4187*c.g - 0.0813*c.b); }
+float keyA(vec3 c){ if (u_key < 0.5) return 1.0; return smoothstep(u_tol, u_tol + 0.06, distance(cbcr(c), u_kc)); }
+float lum(vec2 uv){ vec3 c = texture2D(u_tex, uv).rgb; return dot(c, vec3(0.299,0.587,0.114)) * keyA(c); }
+vec2 toFrame(vec2 uv){ return u_view.xy + vec2(uv.x, 1.0 - uv.y) * (u_view.zw - u_view.xy); }
+float inMask(vec2 f){ return step(u_mask.x, f.x) * step(f.x, u_mask.z) * step(u_mask.y, f.y) * step(f.y, u_mask.w); }
+vec2 toCam(vec2 f){ vec2 c = vec2(u_mirror > 0.5 ? 1.0 - f.x : f.x, 1.0 - f.y); return c * u_scale + u_off; }
 float edge(vec2 uv){
   vec2 d = u_px * 1.5;
   float tl=lum(uv+d*vec2(-1.,1.)), t=lum(uv+d*vec2(0.,1.)), tr=lum(uv+d*vec2(1.,1.));
@@ -864,8 +876,8 @@ float edge(vec2 uv){
 }
 void main(){
   if (u_fx < 0.5 && u_has > 0.5) {
-    vec2 ruv = v_uv; if (u_mirror > 0.5) ruv.x = 1.0 - ruv.x;
-    gl_FragColor = vec4(texture2D(u_tex, ruv * u_scale + u_off).rgb, 1.0); return;
+    vec2 f0 = toFrame(v_uv); vec3 c0 = texture2D(u_tex, toCam(f0)).rgb;
+    gl_FragColor = vec4(c0 * keyA(c0) * inMask(f0), 1.0); return;
   }
   vec2 uv = v_uv;
   float tt = floor(u_time*12.0);
@@ -874,9 +886,8 @@ void main(){
   float shift = rb > 1.0 - 0.18*u_gl ? (rnd(vec2(tt, band)) - 0.5) * 0.09 * u_gl : 0.0;
   float jolt = step(0.965, rnd(vec2(tt, 3.7))) * u_gl;
   uv.x += shift + jolt * (rnd(vec2(band*0.31, tt)) - 0.5) * 0.05;
-  vec2 cuv = uv;
-  if (u_mirror > 0.5) cuv.x = 1.0 - cuv.x;
-  cuv = cuv * u_scale + u_off;
+  vec2 f = toFrame(uv);
+  vec2 cuv = toCam(f);
   vec3 col = vec3(0.0);
   if (u_has > 0.5) {
     float k = 0.12;
@@ -886,6 +897,7 @@ void main(){
     col = u_col * m;
     col = max(col, vec3(1.0, 0.15, 0.3) * mr * 0.55 * u_gl);
     col = max(col, vec3(0.2, 0.9, 1.0) * mb * 0.45 * u_gl);
+    col *= inMask(f);
   } else {
     float n = rnd(floor(v_uv * vec2(160.0, 90.0)) + tt);
     col = vec3(n * 0.12) + u_col * step(0.985, rnd(vec2(band, tt))) * 0.5;
@@ -895,6 +907,19 @@ void main(){
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
 const VERT = `attribute vec2 p; varying vec2 v_uv; void main(){ v_uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
+/* Inquadratura: area tenuta (mask), eventuale ingrandimento (view) e colore del green screen */
+function frameGeom() {
+  const vs = S.settings.video, ed = CAM.edit;
+  const m = (vs.mask && !ed) ? vs.mask : [0, 0, 1, 1];
+  let view = [0, 0, 1, 1];
+  if (vs.zoom && vs.mask && !ed) {
+    const cx = (m[0] + m[2]) / 2, cy = (m[1] + m[3]) / 2, k = Math.min(1 / (m[2] - m[0]), 1 / (m[3] - m[1]));
+    view = [cx - 0.5 / k, cy - 0.5 / k, cx + 0.5 / k, cy + 0.5 / k];
+  }
+  return { mask: m, view, key: !!vs.key && ed !== 'pick' };
+}
+const hexRgb = (c) => [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255];
+const cbcrOf = ([r, g, b]) => [-0.1687 * r - 0.3313 * g + 0.5 * b, 0.5 * r - 0.4187 * g - 0.0813 * b];
 const hash2 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const C2D = {
   setup(canvas) {
@@ -905,18 +930,36 @@ const C2D = {
     this.img = this.eg.createImageData(this.sw, this.sh); this.lum = new Float32Array(this.sw * this.sh);
   },
   crop(video, ca) { const vw = video.videoWidth, vh = video.videoHeight, va = vw / vh; return va > ca ? [(vw - vh * ca) / 2, 0, vh * ca, vh] : [0, (vh - vw / ca) / 2, vw, vw / ca]; },
+  /* Disegna nel canvas (dw×dh) la porzione "view" dell'inquadratura, a specchio se serve */
+  drawView(ctx, video, dw, dh, view, mirror) {
+    const [cx, cy, cw, ch] = this.crop(video, 16 / 9);
+    const fx0 = mirror ? 1 - view[2] : view[0], fx1 = mirror ? 1 - view[0] : view[2];
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, dw, dh);
+    ctx.save(); if (mirror) { ctx.translate(dw, 0); ctx.scale(-1, 1); }
+    ctx.drawImage(video, cx + fx0 * cw, cy + view[1] * ch, (fx1 - fx0) * cw, (view[3] - view[1]) * ch, 0, 0, dw, dh);
+    ctx.restore();
+  },
+  maskOut(ctx, dw, dh, view, mask) {
+    const X = (f) => (f - view[0]) / (view[2] - view[0]) * dw, Y = (f) => (f - view[1]) / (view[3] - view[1]) * dh;
+    const x0 = X(mask[0]), x1 = X(mask[2]), y0 = Y(mask[1]), y1 = Y(mask[3]);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, dw, Math.max(0, y0)); ctx.fillRect(0, y1, dw, dh - y1); ctx.fillRect(0, y0, Math.max(0, x0), y1 - y0); ctx.fillRect(x1, y0, dw - x1, y1 - y0);
+  },
   render(t, video, has, fresh, vs) {
     const g = this.g, W = this.cv.width, H = this.cv.height, sw = this.sw, sh = this.sh;
-    if (has && vs.fx === false) {
-      const [x, y, w, h] = this.crop(video, W / H); g.save(); if (vs.mirror) { g.translate(W, 0); g.scale(-1, 1); } g.drawImage(video, x, y, w, h, 0, 0, W, H); g.restore(); return;
-    }
+    const fg = frameGeom();
+    if (has && vs.fx === false) { this.drawView(g, video, W, H, fg.view, vs.mirror); this.maskOut(g, W, H, fg.view, fg.mask); return; }
     const c = vs.col, cr = parseInt(c.slice(1, 3), 16), cg = parseInt(c.slice(3, 5), 16), cb = parseInt(c.slice(5, 7), 16);
     const tt = Math.floor(t / 1000 * 12), gl = vs.gl;
     if (has && fresh) {
-      const [x, y, w, h] = this.crop(video, sw / sh);
-      this.sg.save(); if (vs.mirror) { this.sg.translate(sw, 0); this.sg.scale(-1, 1); } this.sg.drawImage(video, x, y, w, h, 0, 0, sw, sh); this.sg.restore();
+      this.drawView(this.sg, video, sw, sh, fg.view, vs.mirror);
       const d = this.sg.getImageData(0, 0, sw, sh).data, L = this.lum, o = this.img.data;
-      for (let i = 0, j = 0; i < L.length; i++, j += 4) L[i] = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) / 255;
+      const kk = fg.key ? cbcrOf(hexRgb(vs.kc || '#33b34d')) : null, tol = vs.tol ?? 0.09;
+      for (let i = 0, j = 0; i < L.length; i++, j += 4) {
+        const r = d[j] / 255, gg = d[j + 1] / 255, b = d[j + 2] / 255;
+        let a = 1;
+        if (kk) { const cbv = -0.1687 * r - 0.3313 * gg + 0.5 * b - kk[0], crv = 0.5 * r - 0.4187 * gg - 0.0813 * b - kk[1]; const dd = Math.sqrt(cbv * cbv + crv * crv); a = dd <= tol ? 0 : dd >= tol + 0.06 ? 1 : (dd - tol) / 0.06; }
+        L[i] = (r * 0.299 + gg * 0.587 + b * 0.114) * a;
+      }
       const lo = vs.thr * 0.85, hi = lo + 0.14;
       for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
         const k = (yy * sw + xx) * 4;
@@ -928,6 +971,7 @@ const C2D = {
         o[k] = cr * m; o[k + 1] = cg * m; o[k + 2] = cb * m; o[k + 3] = 255;
       }
       this.eg.putImageData(this.img, 0, 0);
+      this.maskOut(this.eg, sw, sh, fg.view, fg.mask);
     } else if (!has) {
       const o = this.img.data; for (let k = 0; k < o.length; k += 4) { const n = Math.random() * 30; o[k] = o[k + 1] = o[k + 2] = n; o[k + 3] = 255; }
       this.eg.putImageData(this.img, 0, 0);
@@ -945,7 +989,7 @@ const C2D = {
   }
 };
 const CAM = {
-  stream: null, video: null, canvas: null, gl: null, prog: null, tex: null, u: {}, ok: false, err: null, lost: false, chosen: '', fresh: false, rvfc: false, camFrames: 0, soft: false,
+  stream: null, video: null, canvas: null, gl: null, prog: null, tex: null, u: {}, ok: false, err: null, lost: false, chosen: '', fresh: false, rvfc: false, camFrames: 0, soft: false, edit: null,
   setup() {
     this.video = $('camVideo'); this.video.hidden = false;
     Object.assign(this.video.style, { position: 'fixed', left: '-10px', top: '-10px', width: '2px', height: '2px', opacity: '0', pointerEvents: 'none' });
@@ -967,7 +1011,7 @@ const CAM = {
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-    for (const n of ['u_tex', 'u_px', 'u_scale', 'u_off', 'u_res', 'u_time', 'u_thr', 'u_gl', 'u_mirror', 'u_has', 'u_col', 'u_fx']) this.u[n] = gl.getUniformLocation(p, n);
+    for (const n of ['u_tex', 'u_px', 'u_scale', 'u_off', 'u_res', 'u_time', 'u_thr', 'u_gl', 'u_mirror', 'u_has', 'u_col', 'u_fx', 'u_mask', 'u_view', 'u_key', 'u_kc', 'u_tol']) this.u[n] = gl.getUniformLocation(p, n);
     this.resize();
     try { const dbg = gl.getExtension('WEBGL_debug_renderer_info'); const rn = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : ''; this.soft = /swiftshader|llvmpipe|software/i.test(rn); this.renderer = rn; } catch (e) {}
     if (this.soft) { const w = $('vWarn'); w.hidden = false; w.textContent = 'Il browser sta disegnando il video senza la scheda grafica: può andare a scatti. In Chrome attiva Impostazioni → Sistema → «Usa l\'accelerazione grafica», poi riavvia. Intanto usa 540p.'; }
@@ -990,6 +1034,15 @@ const CAM = {
     renderStatus();
   },
   stop() { if (this.stream) { this.stream.getTracks().forEach(t => { t.onended = null; t.stop(); }); this.stream = null; } this.ok = false; },
+  sampleAt(fx, fy) {
+    if (!this.ok || !this.video.videoWidth) return null;
+    const v = this.video, c = document.createElement('canvas'); c.width = 160; c.height = 90; const g = c.getContext('2d', { willReadFrequently: true });
+    C2D.drawView(g, v, 160, 90, [0, 0, 1, 1], S.settings.video.mirror);
+    const x = Math.max(2, Math.min(157, Math.round(fx * 160))), y = Math.max(2, Math.min(87, Math.round(fy * 90)));
+    const d = g.getImageData(x - 2, y - 2, 5, 5).data; let r = 0, gg = 0, b = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
+    const h = (n) => Math.round(n / 25).toString(16).padStart(2, '0'); return '#' + h(r) + h(gg) + h(b);
+  },
   render(t) {
     if (this.mode === '2d') {
       const has = this.ok && this.video.readyState >= 2 && this.video.videoWidth > 0;
@@ -1010,6 +1063,8 @@ const CAM = {
     gl.uniform2f(this.u.u_scale, sx, sy); gl.uniform2f(this.u.u_off, (1 - sx) / 2, (1 - sy) / 2);
     gl.uniform2f(this.u.u_res, W, H); gl.uniform1f(this.u.u_time, t / 1000);
     gl.uniform1f(this.u.u_thr, vs.thr); gl.uniform1f(this.u.u_gl, vs.gl); gl.uniform1f(this.u.u_mirror, vs.mirror ? 1 : 0); gl.uniform1f(this.u.u_has, has ? 1 : 0); gl.uniform1f(this.u.u_fx, vs.fx === false ? 0 : 1);
+    { const fg = frameGeom(); gl.uniform4f(this.u.u_mask, ...fg.mask); gl.uniform4f(this.u.u_view, ...fg.view); gl.uniform1f(this.u.u_key, fg.key ? 1 : 0);
+      const kc = cbcrOf(hexRgb(vs.kc || '#33b34d')); gl.uniform2f(this.u.u_kc, kc[0], kc[1]); gl.uniform1f(this.u.u_tol, vs.tol ?? 0.09); }
     const c = vs.col; gl.uniform3f(this.u.u_col, parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   },
@@ -1717,6 +1772,48 @@ function wire() {
   $('vCol').addEventListener('input', (e) => { vs.col = e.target.value; saveSettings(); });
   $('vMirror').addEventListener('click', (e) => { vs.mirror = !vs.mirror; e.currentTarget.setAttribute('aria-pressed', String(vs.mirror)); saveSettings(); });
   $('vRes').addEventListener('change', (e) => { if (isRec() || blocked()) { e.target.value = String(vs.res); return toast('Cambia risoluzione a registrazione ferma'); } vs.res = +e.target.value; CAM.resize(); saveSettings(); });
+  // Inquadratura e green screen
+  const box = $('vBox'), areaBox = $('vAreaBox'), hint = $('vHint');
+  const syncFrameUI = () => {
+    $('vZoom').setAttribute('aria-pressed', String(!!vs.zoom)); $('vZoom').disabled = !vs.mask;
+    $('vAreaReset').disabled = !vs.mask; $('vKey').setAttribute('aria-pressed', String(!!vs.key));
+    $('vKc').style.background = vs.kc || '#33b34d'; $('vTol').value = vs.tol ?? 0.09; $('vTolO').textContent = Math.round((vs.tol ?? 0.09) * 100);
+  };
+  syncFrameUI();
+  const endEdit = () => { CAM.edit = null; box.classList.remove('editing'); areaBox.hidden = true; hint.hidden = true; };
+  const relPos = (e) => { const r = $('vCanvas').getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; };
+  const startEdit = (mode) => {
+    if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma');
+    if (!CAM.ok) return toast('Webcam non attiva');
+    CAM.edit = mode; box.classList.add('editing'); hint.hidden = false;
+    hint.textContent = mode === 'area' ? 'Trascina il rettangolo da tenere (tutto il resto diventa nero) · Esc per annullare' : 'Clicca sul telo verde · Esc per annullare';
+    if (mode === 'area' && vs.mask) { const m = vs.mask; Object.assign(areaBox.style, { left: m[0] * 100 + '%', top: m[1] * 100 + '%', width: (m[2] - m[0]) * 100 + '%', height: (m[3] - m[1]) * 100 + '%' }); areaBox.hidden = false; }
+  };
+  let drag = null;
+  box.addEventListener('pointerdown', (e) => {
+    if (!CAM.edit) return; e.preventDefault();
+    const p = relPos(e);
+    if (CAM.edit === 'pick') { const c = CAM.sampleAt(p[0], p[1]); if (c) { vs.kc = c; vs.key = true; vs.kcPicked = true; saveSettings(); syncFrameUI(); toast('Colore del telo preso'); } endEdit(); return; }
+    drag = p; box.setPointerCapture(e.pointerId); areaBox.hidden = false;
+    Object.assign(areaBox.style, { left: p[0] * 100 + '%', top: p[1] * 100 + '%', width: '0%', height: '0%' });
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!drag || CAM.edit !== 'area') return; const p = relPos(e);
+    Object.assign(areaBox.style, { left: Math.min(p[0], drag[0]) * 100 + '%', top: Math.min(p[1], drag[1]) * 100 + '%', width: Math.abs(p[0] - drag[0]) * 100 + '%', height: Math.abs(p[1] - drag[1]) * 100 + '%' });
+  });
+  box.addEventListener('pointerup', (e) => {
+    if (!drag || CAM.edit !== 'area') return; const p = relPos(e);
+    const m = [Math.min(p[0], drag[0]), Math.min(p[1], drag[1]), Math.max(p[0], drag[0]), Math.max(p[1], drag[1])]; drag = null;
+    if (m[2] - m[0] < 0.08 || m[3] - m[1] < 0.08) { toast('Area troppo piccola: trascina un rettangolo più grande'); return; }
+    vs.mask = m.map(x => Math.round(x * 1000) / 1000); saveSettings(); syncFrameUI(); endEdit(); toast('Area salvata: fuori diventa nero');
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && CAM.edit) { drag = null; endEdit(); } });
+  $('vArea').addEventListener('click', () => startEdit('area'));
+  $('vPick').addEventListener('click', () => startEdit('pick'));
+  $('vAreaReset').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma'); vs.mask = null; vs.zoom = false; saveSettings(); syncFrameUI(); });
+  $('vZoom').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma'); vs.zoom = !vs.zoom; saveSettings(); syncFrameUI(); });
+  $('vKey').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva il green screen a registrazione ferma'); vs.key = !vs.key; saveSettings(); syncFrameUI(); if (vs.key && !vs.kcPicked) toast('Per un risultato migliore premi «Scegli il verde» e clicca sul telo'); });
+  $('vTol').addEventListener('input', (e) => { vs.tol = +e.target.value; saveSettings(); syncFrameUI(); });
   $('vOn').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva o disattiva il video a registrazione ferma'); vs.on = !vs.on; saveSettings(); renderStatus(); });
   if (!V.codec) { $('vOn').disabled = true; $('vOn').title = 'Questo browser non sa registrare video: usa Chrome o Edge aggiornati'; vs.on = false; }
 
