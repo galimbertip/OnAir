@@ -3,9 +3,18 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '2.9.0' };
+const APP = { name: 'GPverse OnAir', version: '3.0.0' };
 
 const CHANGELOG = [
+  { v: '3.0.0', date: '08/11/2026', title: 'Montaggio, mixer console e nuovi colori', items: [
+    'Montaggio: timeline a tracce (voce con forma d\'onda, sigla, sottofondo, capitoli) con righello, cursore, zoom, scorrimento e annulla/ripristina.',
+    'Blocchi musicali: spostali, accorciali dai bordi, dividili al cursore, eliminali; per ognuno volume e dissolvenze in entrata e in uscita.',
+    'Taglio: selezioni un tratto e lo elimini da voce, musica e video insieme; tutto quello che segue si sposta indietro. Puoi anche solo silenziare la voce in un tratto.',
+    'Capitoli YouTube come bandierine sul righello, da trascinare; il video tagliato viene ricodificato all\'esportazione.',
+    'Mixer a scelta: vista console (fader verticali, indicatori con scala e picco) o compatta; curva dell\'EQ disegnata in ogni fonte.',
+    'Livello voce dal vivo in LUFS, misurato come suonerà nel file, con indicazione basso / buono / alto.',
+    'Colori dei canali: voce ciano, sigla magenta, sottofondo giallo, capitoli verde.'
+  ]},
   { v: '2.9.0', date: '08/11/2026', title: 'Backup e trasferimento tra dispositivi', items: [
     'Impostazioni → Backup e trasferimento: salvi tutto lo studio (audio di sigla, sottofondi e capitoli, testo, logo, sfondo, mixer, disposizioni, tasti, piattaforme) in un file .onair e lo carichi su un altro dispositivo.',
     'Sessioni: «⬇ Trasferisci» salva una registrazione completa (voce, video, musica usata, mix e capitoli) in un file .onair; «⬆ Importa sessione» la apre su un altro dispositivo, pronta da rimixare ed esportare.',
@@ -97,7 +106,7 @@ const CHANGELOG = [
   ]}
 ];
 const ROADMAP = [
-  'Idee per il futuro: teleprompter che segue la voce, grafica in stile mixer professionale'
+  'Idee per il futuro: teleprompter che segue la voce, automazioni di volume disegnate sulla timeline'
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -190,7 +199,7 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { channel: '', ov: { bg: 'none', logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09 } },
+  settings: { mixStyle: 'console', channel: '', ov: { bg: 'none', logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09 } },
   names: new Map()
 };
 async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); }
@@ -232,7 +241,7 @@ async function initAudio() {
   }
   E.bus.mon = E.strips.voice.input;
   E.micAn = E.ctx.createAnalyser(); E.micAn.fftSize = 2048;
-  E.micGain = E.ctx.createGain(); E.micGain.gain.value = dbl(S.settings.micGain || 0); E.micGain.connect(E.micAn);
+  E.micGain = E.ctx.createGain(); E.micGain.gain.value = dbl(S.settings.micGain || 0); E.micGain.connect(E.micAn); LV.setup();
   applyLevels();
   const sink = E.ctx.createGain(); sink.gain.value = 0; sink.connect(E.ctx.destination);
   try {
@@ -630,8 +639,86 @@ async function listen(fromSec, toSec) {
 function stopListen() { if (LS) { try { LS.s.stop(); } catch (e) {} LS = null; paintWave(); } }
 
 /* ------------------------------------------------------------- Mix finale: anteprima ed export */
+/* ------------------------------------------------------------- Montaggio: tempo finale e mappa della voce
+ * La timeline finale (dopo i tagli) è quella su cui stanno musica e capitoli.
+ * Voce e video restano registrati come sono: vmap dice quale pezzo di registrazione va in quale punto. */
+const sessDur = (sess) => sess.outLen ?? sess.len / sess.sr;
+const sessLenS = (sess) => Math.round(sessDur(sess) * sess.sr);
+const vmapOf = (sess) => sess.vmap && sess.vmap.length ? sess.vmap : [{ o: 0, s: 0, d: sess.len / sess.sr }];
+const isIdentity = (sess) => (!sess.vmap || (sess.vmap.length === 1 && sess.vmap[0].o === 0 && sess.vmap[0].s === 0 && Math.abs(sess.vmap[0].d - sess.len / sess.sr) < 1e-3));
+function outToSrc(sess, t) { for (const p of vmapOf(sess)) if (t >= p.o - 1e-6 && t < p.o + p.d) return p.s + (t - p.o); return null; }
+function srcToOut(sess, t) { for (const p of vmapOf(sess)) if (t >= p.s - 1e-6 && t < p.s + p.d) return p.o + (t - p.s); return null; }
+async function readVoiceOut(sess, oa, ob, cache) {
+  const sr = sess.sr, lat = Math.round((sess.latency || 0) * sr);
+  const mutes = sess.vmutes || [];
+  let out;
+  if (isIdentity(sess)) out = await readVoice(sess, oa + lat, ob + lat, false, cache);
+  else {
+    out = new Float32Array(Math.max(0, ob - oa)); const F = Math.round(0.006 * sr), map = vmapOf(sess);
+    for (let i = 0; i < map.length; i++) {
+      const p = map[i], po = Math.round(p.o * sr), ps = Math.round(p.s * sr), pd = Math.round(p.d * sr);
+      const x0 = Math.max(oa, po), x1 = Math.min(ob, po + pd); if (x1 <= x0) continue;
+      const v = await readVoice(sess, ps + (x0 - po) + lat, ps + (x1 - po) + lat, false, cache);
+      const prevJoin = i > 0 && Math.abs((map[i - 1].s + map[i - 1].d) - p.s) > 1e-3, nextJoin = i < map.length - 1 && Math.abs((p.s + p.d) - map[i + 1].s) > 1e-3;
+      for (let n = 0; n < v.length; n++) {
+        const k = x0 + n - po; let e = 1;
+        if (prevJoin && k < F) e = k / F; if (nextJoin && pd - k < F) e = Math.min(e, (pd - k) / F);
+        out[x0 - oa + n] = v[n] * e;
+      }
+    }
+  }
+  if (mutes.length) {
+    const F = Math.round(0.01 * sr);
+    for (const m of mutes) {
+      const ma = Math.round(m.a * sr), mb = Math.round(m.b * sr); if (mb <= oa || ma >= ob) continue;
+      for (let x = Math.max(oa, ma - F); x < Math.min(ob, mb + F); x++) { const e = x < ma ? (ma - x) / F : x >= mb ? (x - mb) / F : 0; out[x - oa] *= Math.min(1, e); }
+    }
+  }
+  return out;
+}
+/* Operazioni di montaggio (tempo finale, in secondi) */
+const EDIT = {
+  snap(sess) { return JSON.stringify({ segs: sess.segs, vmap: sess.vmap || null, vmutes: sess.vmutes || [], chapters: sess.chapters || null, outLen: sess.outLen ?? null }); },
+  restore(sess, j) { const o = JSON.parse(j); sess.segs = o.segs; sess.vmap = o.vmap; sess.vmutes = o.vmutes; sess.chapters = o.chapters; if (o.outLen == null) delete sess.outLen; else sess.outLen = o.outLen; },
+  cut(sess, a, b) {
+    const D = sessDur(sess); a = Math.max(0, a); b = Math.min(D, b); const L = b - a; if (L <= 0.01) return;
+    const map = []; for (const p of vmapOf(sess)) {
+      const e = p.o + p.d;
+      if (p.o < a) map.push({ o: p.o, s: p.s, d: Math.min(e, a) - p.o });
+      if (e > b) { const st = Math.max(p.o, b); map.push({ o: st - L, s: p.s + (st - p.o), d: e - st }); }
+    }
+    sess.vmap = map.filter(p => p.d > 1e-4);
+    const segs = []; for (const g of sess.segs) {
+      const gE = g.tEnd ?? D;
+      if (gE <= a) { segs.push(g); continue; }
+      if (g.tStart >= b) { segs.push({ ...g, tStart: g.tStart - L, tEnd: gE - L }); continue; }
+      if (g.tStart < a) segs.push({ ...g, tEnd: a, fout: 0 });
+      if (gE > b) segs.push({ ...g, tStart: a, off: g.off + (b - g.tStart), tEnd: gE - L, fin: 0, cont: true });
+    }
+    sess.segs = segs;
+    const mutes = []; for (const m of sess.vmutes || []) { if (m.b <= a) mutes.push(m); else if (m.a >= b) mutes.push({ a: m.a - L, b: m.b - L }); else { const na = Math.min(m.a, a), nb = m.b > b ? m.b - L : a; if (nb > na) mutes.push({ a: na, b: nb }); } }
+    sess.vmutes = mutes;
+    if (sess.chapters) { const seen = new Set(); sess.chapters = sess.chapters.map(c => ({ ...c, t: c.t >= b ? Math.round(c.t - L) : c.t > a ? Math.floor(a) : c.t })).filter(c => { if (seen.has(c.t)) return false; seen.add(c.t); return true; }); }
+    sess.outLen = D - L;
+  },
+  mute(sess, a, b) {
+    const m = [...(sess.vmutes || []), { a, b }].sort((x, y) => x.a - y.a), out = [];
+    for (const x of m) { const l = out[out.length - 1]; if (l && x.a <= l.b) l.b = Math.max(l.b, x.b); else out.push({ ...x }); }
+    sess.vmutes = out;
+  },
+  unmute(sess, a, b) {
+    const out = []; for (const m of sess.vmutes || []) { if (m.b <= a || m.a >= b) out.push(m); else { if (m.a < a) out.push({ a: m.a, b: a }); if (m.b > b) out.push({ a: b, b: m.b }); } }
+    sess.vmutes = out;
+  },
+  split(sess, g, t) {
+    if (t <= g.tStart + 0.05 || t >= g.tEnd - 0.05) return null;
+    const right = { ...g, tStart: t, off: g.off + (t - g.tStart), fin: 0, cont: true }; g.tEnd = t; g.fout = 0;
+    sess.segs.splice(sess.segs.indexOf(g) + 1, 0, right); return right;
+  }
+};
+
 async function prepSession(sess, decodeSr) {
-  const total = sess.len, srT = sess.sr;
+  const total = sessLenS(sess), srT = sess.sr;
   const bufs = new Map();
   for (const id of new Set(sess.segs.map(s => s.fileId))) {
     let b = decodeSr === E.sr ? E.buffers.get(id) : null;
@@ -652,21 +739,24 @@ function schedSeg(c, prep, s, a, b, dest, base) {
   const offset = (s.O + startAt - s.S) / srT; if (offset >= buf.duration) return null;
   const when = base + (startAt - a) / srT, dur = (stopAt - startAt) / srT;
   const src = c.createBufferSource(); src.buffer = buf; const env = c.createGain(); src.connect(env); env.connect(dest);
-  const F = 0.015, tS = base + (s.S - a) / srT, tE = base + (s.E - a) / srT;
-  if (!s.cPrev && s.S >= a) { env.gain.setValueAtTime(0, tS); env.gain.linearRampToValueAtTime(1, tS + F); }
-  if (!s.cNext && s.E <= b) { env.gain.setValueAtTime(1, Math.max(when, tE - F)); env.gain.linearRampToValueAtTime(0, tE); }
-  src.start(Math.max(0, when), offset, dur); return src;
+  const F = 0.015, tS = base + (s.S - a) / srT, tE = base + (s.E - a) / srT, w = Math.max(0, when);
+  const g = dbl(s.gain || 0), fin = Math.max(s.cPrev ? 0 : F, s.fin || 0), fout = Math.max(s.cNext ? 0 : F, s.fout || 0);
+  const val = (t) => g * Math.max(0, Math.min(1, fin > 0 ? (t - tS) / fin : 1, fout > 0 ? (tE - t) / fout : 1));
+  env.gain.setValueAtTime(val(w), w);
+  if (fin > 0 && tS + fin > w) env.gain.linearRampToValueAtTime(val(tS + fin), tS + fin);
+  if (fout > 0) { if (tE - fout > w) env.gain.setValueAtTime(val(tE - fout), tE - fout); env.gain.linearRampToValueAtTime(0, tE); }
+  src.start(w, offset, dur); return src;
 }
 async function renderMix(sess, mix, sink, onProg, phase, outSr) {
   const prep = await prepSession(sess, sess.sr);
-  const sr = sess.sr, total = sess.len, W = sr * 10, PAD = sr, cache = new Map(); outSr = outSr || sr;
+  const sr = sess.sr, total = sessLenS(sess), W = sr * 10, PAD = sr, cache = new Map(); outSr = outSr || sr;
   const os = (x) => Math.round(x / sr * outSr);
   for (let a = 0; a < total; a += W) {
     const s0 = Math.max(0, a - PAD), b = Math.min(total, a + W), len = b - s0;
     const o0 = os(s0), oa = os(a), ob = os(b);
     const oc = new OfflineAudioContext(2, ob - o0, outSr);
     const st = {}; for (const ch of ALL) { st[ch] = new Strip(oc, ch, oc.destination); st[ch].set(mix[ch], false); }
-    const v = await readVoice(sess, s0 + prep.lat, b + prep.lat, false, cache);
+    const v = await readVoiceOut(sess, s0, b, cache);
     const vb = oc.createBuffer(1, len, sr); vb.copyToChannel(v, 0);
     const vs = oc.createBufferSource(); vs.buffer = vb; vs.connect(st.voice.input); vs.start(0);
     for (const s of prep.segs) schedSeg(oc, prep, s, s0, b, st[s.ch].input, 0);
@@ -709,8 +799,12 @@ class VidPlayer {
     } catch (e) { console.warn(e); }
     this.busy = false;
   }
-  draw(pos) {
+  show(outT) { const src = outToSrc(this.sess, Math.max(0, Math.min(sessDur(this.sess) - 0.01, outT))); this.lastOut = outT; this.curSrc = src ?? 0; this.start(this.curSrc); }
+  draw(outPos) {
     if (this.err) return;
+    if (this.lastOut != null) { const src = outToSrc(this.sess, outPos); if (src != null && Math.abs(src - (this.curSrc + (outPos - this.lastOut))) > 0.25) { this.show(outPos); return; } }
+    if (this.lastOut != null) { this.curSrc += outPos - this.lastOut; this.lastOut = outPos; }
+    const pos = this.curSrc ?? outPos;
     const us = pos * 1e6; let f = null;
     while (this.q.length && this.q[0].timestamp <= us + 16000) { if (f) f.close(); f = this.q.shift(); }
     if (f) { this.g.drawImage(f, 0, 0, this.cv.width, this.cv.height); f.close(); this.shown = true; }
@@ -722,13 +816,13 @@ class VidPlayer {
 }
 class Preview {
   constructor(sess, onTick) {
-    this.sess = sess; this.onTick = onTick; this.total = sess.len / sess.sr; this.pos = 0; this.playing = false; this.gen = 0;
+    this.sess = sess; this.onTick = onTick; this.total = sessDur(sess); this.pos = 0; this.playing = false; this.gen = 0;
     this.out = E.ctx.createGain(); this.out.connect(E.ctx.destination);
     this.st = {}; for (const ch of ALL) { this.st[ch] = new Strip(E.ctx, ch, this.out); this.st[ch].set(sess.mix[ch], false); }
     this.srcs = []; this.cache = new Map();
     this.vid = null;
   }
-  attachVideo(canvas) { if (this.sess.video && this.sess.video.nGroups && typeof VideoDecoder !== 'undefined') { this.vid = new VidPlayer(this.sess, canvas); this.vid.start(0); } }
+  attachVideo(canvas) { if (this.sess.video && this.sess.video.nGroups && typeof VideoDecoder !== 'undefined') { this.vid = new VidPlayer(this.sess, canvas); this.vid.show(0); } }
   async play(from) {
     this.stop(); const gen = ++this.gen;
     if (!this.prep) this.prep = await prepSession(this.sess, E.sr);
@@ -736,16 +830,17 @@ class Preview {
     from = Math.max(0, Math.min(this.total - 0.1, from));
     const c = E.ctx; this.t0 = c.currentTime + 0.1; this.from = from; this.playing = true;
     const a = Math.round(from * this.prep.srT);
-    for (const s of this.prep.segs) { const src = schedSeg(c, this.prep, s, a, this.sess.len, this.st[s.ch].input, this.t0); if (src) this.srcs.push(src); }
+    for (const s of this.prep.segs) { const src = schedSeg(c, this.prep, s, a, sessLenS(this.sess), this.st[s.ch].input, this.t0); if (src) this.srcs.push(src); }
     this.vNext = a; this.pump(gen); this.timer = setInterval(() => this.pump(gen), 300);
-    if (this.vid) this.vid.start(from);
+    if (this.vid) this.vid.show(from);
   }
   async pump(gen) {
     if (this.busy || !this.playing || gen !== this.gen) return; this.busy = true;
     const srT = this.prep.srT, a0 = Math.round(this.from * srT), ahead = Math.round((this.position() + 4) * srT);
-    while (this.playing && gen === this.gen && this.vNext < Math.min(ahead, this.sess.len)) {
-      const b = Math.min(this.sess.len, this.vNext + srT * 2);
-      const v = await readVoice(this.sess, this.vNext + this.prep.lat, b + this.prep.lat, false, this.cache);
+    const LS = sessLenS(this.sess);
+    while (this.playing && gen === this.gen && this.vNext < Math.min(ahead, LS)) {
+      const b = Math.min(LS, this.vNext + srT * 2);
+      const v = await readVoiceOut(this.sess, this.vNext, b, this.cache);
       if (!this.playing || gen !== this.gen) break;
       const buf = E.ctx.createBuffer(1, v.length, srT); buf.copyToChannel(v, 0);
       const s = E.ctx.createBufferSource(); s.buffer = buf; s.connect(this.st.voice.input);
@@ -764,7 +859,8 @@ class Preview {
     this.onTick && this.onTick();
   }
   set(ch) { this.st[ch].set(this.sess.mix[ch], false); }
-  seekVideo(t) { if (this.vid) this.vid.start(t); }
+  seekVideo(t) { if (this.vid) this.vid.show(t); }
+  invalidate() { this.prep = null; this.total = sessDur(this.sess); }
   destroy() { this.stop(); if (this.vid) this.vid.stop(); try { this.out.disconnect(); } catch (e) {} }
 }
 
@@ -1128,6 +1224,10 @@ const OUT = {
   render(t) {
     const g = this.g, W = this.cv.width, H = this.cv.height, src = CAM.canvas, ov = S.settings.ov;
     const r = this.region(), full = CAM.edit || ov.bg === 'none' || (r[0] < 0.002 && r[1] < 0.002 && r[2] > 0.998 && r[3] > 0.998);
+    // Se non c'è niente da sovrapporre si mostra direttamente la webcam elaborata (più leggero)
+    const pass = full && !(ov.logoOn && this.logo) && !this.sub;
+    if (pass !== this.pass) { this.pass = pass; src.style.display = pass ? 'block' : 'none'; this.cv.style.display = pass ? 'none' : 'block'; }
+    if (pass) return;
     if (full) g.drawImage(src, 0, 0, W, H);
     else {
       const rx = r[0] * W, ry = r[1] * H, rw = (r[2] - r[0]) * W, rh = (r[3] - r[1]) * H;
@@ -1360,11 +1460,45 @@ async function exportVideo(sess, opts, onProg) {
     aenc.encode(ad); ad.close(); frames += n;
   });
   await aenc.flush(); aenc.close(); if (aerr) throw aerr;
-  const v = sess.video, endUs = Math.round(sess.len / sess.sr * 1e6);
+  const v = sess.video, endUs = Math.round(sessDur(sess) * 1e6);
   const target = new WebMMuxer.ArrayBufferTarget();
   const mx = new WebMMuxer.Muxer({ target, video: { codec: v.mux, width: v.w, height: v.h, frameRate: v.fps }, audio: { codec: 'A_OPUS', sampleRate: OUT, numberOfChannels: 2 }, firstTimestampBehavior: 'permissive' });
   let ai = 0, firstA = true, firstV = true, lastV = -1;
   const addA = () => { const a = achunks[ai++]; mx.addAudioChunkRaw(a.d, 'key', a.ts, firstA ? ameta || undefined : undefined); firstA = false; };
+  if (!isIdentity(sess)) {
+    // Video montato: si decodifica la registrazione e si ricodificano solo i pezzi tenuti, con i nuovi orari
+    const map = vmapOf(sess); let verr = null, nOut = 0, lastPiece = -1, firstOut = true, lastOutTs = -1;
+    const enc = new VideoEncoder({ output: (c, m) => {
+      const d = new Uint8Array(c.byteLength); c.copyTo(d);
+      while (ai < achunks.length && achunks[ai].ts <= c.timestamp) addA();
+      mx.addVideoChunkRaw(d, c.type, c.timestamp, firstOut ? (m && m.decoderConfig ? m : (v.meta || undefined)) : undefined); firstOut = false;
+    }, error: (e) => { verr = e; } });
+    enc.configure({ codec: v.codec, width: v.w, height: v.h, bitrate: v.h >= 1080 ? 5000000 : 2500000, framerate: v.fps || 30 });
+    const dec = new VideoDecoder({ output: (f) => {
+      const t = f.timestamp / 1e6; let pi = -1;
+      for (let k = 0; k < map.length; k++) if (t >= map[k].s - 1e-4 && t < map[k].s + map[k].d) { pi = k; break; }
+      if (pi < 0) { f.close(); return; }
+      const ts = Math.round((map[pi].o + (t - map[pi].s)) * 1e6); if (ts <= lastOutTs || ts >= endUs) { f.close(); return; }
+      const nf = new VideoFrame(f, { timestamp: ts, duration: 33333 }); f.close();
+      enc.encode(nf, { keyFrame: nOut % 60 === 0 || pi !== lastPiece }); nf.close(); nOut++; lastPiece = pi; lastOutTs = ts;
+    }, error: (e) => { verr = e; } });
+    dec.configure({ codec: v.codec, codedWidth: v.w, codedHeight: v.h });
+    let started = false;
+    for (let i = 0; i < (v.nGroups || 0); i++) {
+      const g = await DB.get('chunks', vkey(sess.id, i)); if (!g) continue;
+      for (const c of g.ch) {
+        if (!started) { if (!c.key) continue; started = true; }
+        while (dec.decodeQueueSize > 8 || enc.encodeQueueSize > 8) await new Promise(r => setTimeout(r, 4));
+        if (verr) throw verr;
+        dec.decode(new EncodedVideoChunk({ type: c.key ? 'key' : 'delta', timestamp: c.ts, data: c.d }));
+      }
+      onProg(opts.normalize ? 1 : 0, 0.9 + 0.1 * (i + 1) / v.nGroups);
+    }
+    await dec.flush(); await enc.flush(); dec.close(); enc.close(); if (verr) throw verr;
+    while (ai < achunks.length) addA();
+    mx.finalize();
+    return { blob: new Blob([target.buffer], { type: 'video/webm' }), lufs };
+  }
   for (let i = 0; i < (v.nGroups || 0); i++) {
     const g = await DB.get('chunks', vkey(sess.id, i)); if (!g) continue;
     for (const c of g.ch) {
@@ -1550,39 +1684,81 @@ const KNOBS = [
   { k: 'comp', label: 'Compr.', min: 0, max: 100, step: 1, unit: '%', voice: true }
 ];
 const fmtK = (v, unit) => (unit === ' dB' && v > 0 ? '+' : '') + (Math.round(v * 10) / 10) + unit;
+/* Curva dell'EQ di una fonte (per il disegno nelle strisce) */
+const EQR = {
+  curve(ch, p) {
+    if (!this.ctx) { this.ctx = new OfflineAudioContext(1, 1, 48000); this.freqs = new Float32Array(72).map((_, i) => 20 * Math.pow(1000, i / 71)); this.mag = new Float32Array(72); this.ph = new Float32Array(72); }
+    const st = new Strip(this.ctx, ch, null); st.set(p, false); const db = new Float32Array(72).fill(p.gain || 0);
+    for (const f of [st.hp, st.lo, st.mi, st.hi].filter(Boolean)) { f.getFrequencyResponse(this.freqs, this.mag, this.ph); for (let i = 0; i < 72; i++) db[i] += 20 * Math.log10(Math.max(1e-6, this.mag[i])); }
+    return db;
+  },
+  draw(cv, ch, p) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 140, h = cv.clientHeight || 36; if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    const col = getComputedStyle(cv).getPropertyValue('--cc').trim() || '#00e5ff', db = this.curve(ch, p), Y = (v) => h / 2 - Math.max(-15, Math.min(15, v)) / 15 * (h / 2 - 3);
+    g.strokeStyle = 'rgba(111,135,166,.35)'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
+    for (const f of [100, 1000, 10000]) { const x = Math.log(f / 20) / Math.log(1000) * w; g.beginPath(); g.moveTo(x, 2); g.lineTo(x, h - 2); g.stroke(); }
+    g.beginPath(); for (let i = 0; i < 72; i++) { const x = i / 71 * w, y = Y(db[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.strokeStyle = col; g.lineWidth = 2; g.stroke(); g.lineTo(w, h / 2); g.lineTo(0, h / 2); g.closePath(); g.globalAlpha = 0.15; g.fillStyle = col; g.fill(); g.globalAlpha = 1;
+  }
+};
+/* Disegno degli indicatori di livello: orizzontali (compatto) o verticali con scala (console) */
+function drawMeter(cv, db, ref) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const vert = h > w, L = vert ? h : w, pos = (d) => Math.max(0, Math.min(1, (d + 60) / 60)) * L;
+  const now2 = performance.now(); if (db > ref.hold || now2 - ref.holdT > 1500) { ref.hold = db; ref.holdT = now2; }
+  g.fillStyle = '#02040a'; g.fillRect(0, 0, w, h);
+  const grd = vert ? g.createLinearGradient(0, h, 0, 0) : g.createLinearGradient(0, 0, w, 0);
+  grd.addColorStop(0, '#00c8a0'); grd.addColorStop(0.62, '#3aff9a'); grd.addColorStop(0.8, '#ffe600'); grd.addColorStop(0.92, '#ff8a00'); grd.addColorStop(1, '#ff2b4a');
+  g.fillStyle = grd; const lv = pos(db);
+  if (vert) { const bw = Math.max(6, w - 16); g.fillRect(w - bw, h - lv, bw, lv); g.fillStyle = '#fff'; g.fillRect(w - bw, h - pos(ref.hold) - 1, bw, 2);
+    g.fillStyle = 'rgba(111,135,166,.9)'; g.font = '9px "JetBrains Mono", monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (const d of [0, -6, -12, -24, -36, -48]) { const y = h - pos(d); g.fillRect(w - bw - 3, y, 2, 1); if (w > 22) g.fillText(String(-d), w - bw - 4, Math.max(5, Math.min(h - 5, y))); }
+  } else { g.fillRect(0, 0, lv, h); g.fillStyle = '#fff'; g.fillRect(pos(ref.hold) - 1, 0, 2, h); }
+  if (ref.out) { ref.out.textContent = ref.hold <= -59 ? '−∞' : ref.hold.toFixed(1); ref.out.classList.toggle('clip', ref.hold > -1); }
+}
 function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
   host.replaceChildren(); const refs = {};
+  host.classList.toggle('console', (S.settings.mixStyle || 'console') === 'console');
   for (const ch of ALL) {
-    const p = mix[ch]; const d = document.createElement('div'); d.className = 'strip'; const pre = host.id + '-' + ch;
-    d.innerHTML = `<div class="h"><b>${CH_LABEL[ch]}</b><span class="v"></span><button class="rst" title="Riporta al predefinito">↺</button>${mutes ? '<button class="mute" aria-pressed="false">MUTE</button>' : ''}</div>
-      ${meters ? '<div class="meter"><i></i></div>' : ''}
-      ${mutes && ch === 'voice' ? `<label class="fad" for="${pre}-in" title="Guadagno del microfono: alza il livello registrato">Ingresso mic<span class="row" style="flex-wrap:nowrap"><input type="range" id="${pre}-in" min="0" max="30" step="1" style="flex:1"><output class="v">+0 dB</output></span></label>` : ''}
-      <label class="fad" for="${pre}-vol">${mutes ? 'Volume cuffia' : 'Volume'}<input type="range" id="${pre}-vol" min="0" max="150" step="1"></label>
+    const p = mix[ch]; const d = document.createElement('div'); d.className = 'strip'; d.dataset.ch = ch; const pre = host.id + '-' + ch;
+    d.innerHTML = `<div class="h"><i class="dot"></i><b>${CH_LABEL[ch]}</b><span class="v"></span></div>
+      <canvas class="eqc" title="Curva dell'EQ: apri «Gain ed EQ» per cambiarla"></canvas>
+      <div class="cs-main">
+        ${meters ? '<div class="mcol"><output class="pk">−∞</output><canvas class="mtr"></canvas></div>' : ''}
+        <label class="fad" for="${pre}-vol"><span class="fl">${mutes ? 'Volume cuffia' : 'Volume'}</span><input type="range" class="vol" id="${pre}-vol" min="0" max="150" step="1"></label>
+      </div>
+      <div class="cs-btns"><button class="rst" title="Riporta al predefinito">↺</button>${mutes ? '<button class="mute" aria-pressed="false">MUTE</button>' : ''}</div>
+      ${mutes && ch === 'voice' ? `<label class="fad inmic" for="${pre}-in" title="Guadagno del microfono: alza il livello registrato"><span class="fl">Ingresso mic</span><span class="row" style="flex-wrap:nowrap"><input type="range" id="${pre}-in" min="0" max="30" step="1" style="flex:1"><output class="v">+0 dB</output></span></label>` : ''}
       <details class="eq"><summary>Gain ed EQ</summary><div class="knobs"></div><button class="def">★ Usa questi valori come predefiniti</button></details>`;
-    const kn = d.querySelector('.knobs'); const ctl = {};
+    const kn = d.querySelector('.knobs'); const ctl = {}; const eqc = d.querySelector('.eqc');
+    const redrawEq = () => requestAnimationFrame(() => EQR.draw(eqc, ch, p));
     for (const K of KNOBS) {
       if (K.voice && ch !== 'voice') continue;
       const id = `${pre}-${K.k}`;
       const lab = document.createElement('label'); lab.htmlFor = id; lab.textContent = K.label;
       const r = document.createElement('input'); r.type = 'range'; r.id = id; r.min = K.min; r.max = K.max; r.step = K.step;
       const o = document.createElement('output');
-      r.addEventListener('input', () => { p[K.k] = +r.value; o.textContent = fmtK(p[K.k], K.unit); onChange(ch); });
+      r.addEventListener('input', () => { p[K.k] = +r.value; o.textContent = fmtK(p[K.k], K.unit); onChange(ch); redrawEq(); });
       r.addEventListener('dblclick', () => { r.value = K.k === 'comp' ? fullP(ch).comp : 0; r.dispatchEvent(new Event('input')); });
       kn.append(lab, r, o); ctl[K.k] = { r, o, unit: K.unit };
     }
     if (ch === 'voice') {
       const w = document.createElement('label'); w.className = 'chk';
       w.innerHTML = `<input type="checkbox" id="${pre}-hp"> Taglia i bassi sotto 85 Hz (rimbombo)`;
-      const cb = w.querySelector('input'); cb.addEventListener('change', () => { p.hp = cb.checked; onChange(ch); });
+      const cb = w.querySelector('input'); cb.addEventListener('change', () => { p.hp = cb.checked; onChange(ch); redrawEq(); });
       kn.append(document.createElement('span'), w); ctl.hp = { cb };
     }
-    const vol = d.querySelector('.fad input'), vv = d.querySelector('.v');
+    eqc.addEventListener('click', () => { const de = d.querySelector('details.eq'); de.open = !de.open; });
+    const vol = d.querySelector('input.vol'), vv = d.querySelector('.h .v');
     vol.addEventListener('input', () => { p.vol = +vol.value; vv.textContent = p.vol + '%'; onChange(ch); });
     vol.addEventListener('dblclick', () => { vol.value = S.defaults[ch].vol; vol.dispatchEvent(new Event('input')); });
     const refresh = () => {
       vol.value = p.vol; vv.textContent = p.vol + '%';
       for (const K of KNOBS) if (ctl[K.k]) { ctl[K.k].r.value = p[K.k]; ctl[K.k].o.textContent = fmtK(p[K.k], K.unit); }
-      if (ctl.hp) ctl.hp.cb.checked = !!p.hp;
+      if (ctl.hp) ctl.hp.cb.checked = !!p.hp; redrawEq();
     };
     refresh();
     d.querySelector('.rst').addEventListener('click', () => { Object.assign(p, fullP(ch, S.defaults[ch])); refresh(); onChange(ch); toast(`${CH_LABEL[ch]}: livelli predefiniti ripristinati`); });
@@ -1590,10 +1766,34 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
     if (mutes) { const m = d.querySelector('.mute'); m.setAttribute('aria-pressed', String(mutes[ch])); m.addEventListener('click', () => { mutes[ch] = !mutes[ch]; m.setAttribute('aria-pressed', String(mutes[ch])); onChange(ch); }); }
     const inR = d.querySelector(`#${pre}-in`);
     if (inR) { inR.value = S.settings.micGain || 0; inR.nextElementSibling.textContent = '+' + inR.value + ' dB'; inR.addEventListener('input', () => setMicGain(+inR.value)); }
-    host.append(d); refs[ch] = { meter: d.querySelector('.meter i'), refresh };
+    host.append(d); refs[ch] = { cv: d.querySelector('.mtr'), out: d.querySelector('.pk'), hold: -100, holdT: 0, refresh };
+  }
+  if (meters) {
+    const m = document.createElement('div'); m.className = 'strip master';
+    m.innerHTML = `<div class="h"><i class="dot"></i><b>LIVELLO VOCE</b></div>
+      <div class="lufs"><output class="lv-n">—</output><small>LUFS (3 s)</small></div>
+      <div class="cs-main"><div class="mcol"><output class="pk">−∞</output><canvas class="mtr"></canvas></div><div class="lv-scale"><span>alto</span><span>buono</span><span>basso</span></div></div>
+      <span class="note lv-hint">Parla: misuro la voce come suonerà nel file.</span>`;
+    host.append(m); refs.master = { cv: m.querySelector('.mtr'), out: m.querySelector('.pk'), hold: -100, holdT: 0, num: m.querySelector('.lv-n'), hint: m.querySelector('.lv-hint') };
   }
   return refs;
 }
+/* Misura del volume della voce dal vivo (filtro K come la norma LUFS) */
+const LV = {
+  buf: null, hist: [],
+  setup() {
+    const c = E.ctx, hs = c.createBiquadFilter(), hp = c.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 1500; hs.gain.value = 4; hp.type = 'highpass'; hp.frequency.value = 38; hp.Q.value = 0.5;
+    this.an = c.createAnalyser(); this.an.fftSize = 32768; E.micGain.connect(hs); hs.connect(hp); hp.connect(this.an); this.buf = new Float32Array(this.an.fftSize);
+  },
+  read() {
+    if (!this.an) return null; this.an.getFloatTimeDomainData(this.buf);
+    const n = Math.min(this.buf.length, Math.round(0.4 * E.sr)); let ms = 0; for (let i = this.buf.length - n; i < this.buf.length; i++) ms += this.buf[i] * this.buf[i]; ms /= n;
+    const t = performance.now(); this.hist.push([t, ms]); while (this.hist.length && t - this.hist[0][0] > 3000) this.hist.shift();
+    const st = this.hist.reduce((a, x) => a + x[1], 0) / this.hist.length;
+    const L = (v) => v > 1e-10 ? -0.691 + 10 * Math.log10(v) + 3.01 : -100; // +3 dB: nel file la voce è su due canali
+    return { m: L(ms), s: L(st) };
+  }
+};
 let meterRefs = null;
 const FPS = { t: 0 };
 const MICPK = { v: -100, t: 0 };
@@ -1604,8 +1804,13 @@ function loop(t) {
     const T = isRec() ? Math.max(0, tlAt(now())) : R.state === 'hold' ? R.len / E.sr : 0;
     $('tc').textContent = fmt(R.state === 'preroll' ? R.Tanchor : T);
     if (meterRefs) {
-      const set = (ch, an) => { const db = peakDb(an); const pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100)); const el = meterRefs[ch].meter; el.style.width = pct + '%'; el.style.setProperty('--mw', (el.parentElement.clientWidth || 300) + 'px'); };
+      const set = (ch, an) => { const r = meterRefs[ch]; if (r && r.cv) drawMeter(r.cv, peakDb(an), r); };
       set('voice', E.micAn); for (const ch of CHS) set(ch, E.an[ch]);
+      const mr = meterRefs.master; if (mr) {
+        set('master', E.micAn); const lv = LV.read();
+        if (lv) { const v = lv.s; mr.num.textContent = v < -70 ? '—' : v.toFixed(1); const st = v < -70 ? ['Parla: misuro la voce come suonerà nel file.', 'var(--dim)'] : v < -30 ? ['Molto basso: alza «Ingresso mic» o avvicinati al microfono', 'var(--rec)'] : v < -24 ? ['Basso: alza un po\' «Ingresso mic»', 'var(--warn)'] : v > -10 ? ['Troppo alto: abbassa «Ingresso mic»', 'var(--rec)'] : ['Buono', 'var(--ok)'];
+          mr.hint.textContent = st[0]; mr.num.style.color = st[1]; }
+      }
       if (!$('devModal').hidden) {
         const db = peakDb(E.micAn); const el = $('dMicMeter'); el.style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%'; el.style.setProperty('--mw', (el.parentElement.clientWidth || 300) + 'px');
         const ts = performance.now(); if (db > (MICPK.v - 0.5) || ts - MICPK.t > 2000) { MICPK.v = db; MICPK.t = ts; }
@@ -1621,10 +1826,11 @@ function loop(t) {
     const tn = performance.now(); if (!FPS.t) FPS.t = tn;
     if (tn - FPS.t >= 1000) { const sec = (tn - FPS.t) / 1000; const cf = Math.round(CAM.camFrames / sec), ef = Math.round((V.encFrames || 0) / sec); CAM.camFrames = 0; V.encFrames = 0; FPS.t = tn;
       const el = $('vFps'); if (el) el.textContent = CAM.ok ? `Webcam: ${cf} fps` + (V.active && R.state === 'rec' ? ` · video registrato: ${ef} fps` : '') + (cf && cf < 20 ? ' — la webcam è lenta: di solito è poca luce' : '') : '—'; }
-    if (R.state === 'rec' && V.active) V.frame(OUT.cv, tlAt(now()));
+    if (R.state === 'rec' && V.active) V.frame(OUT.pass ? CAM.canvas : OUT.cv, tlAt(now()));
     if (LS && R.state === 'hold') paintWave();
     if (PV && PV.playing) PV.tick();
     if (PV && PV.vid) PV.vid.draw(PV.position());
+    if (ED.open) ED.frame();
   }
   requestAnimationFrame(loop);
 }
@@ -1640,7 +1846,7 @@ async function openSessions(selId) {
     if (R.session && s.id === R.session.id) continue;
     s.mix = normMix(s.mix);
     const el = document.createElement('li'); if (s.id === selId) el.classList.add('sel');
-    const dur = s.len / s.sr;
+    const dur = sessDur(s);
     const missing = [...new Set(s.segs.map(g => g.fileId))].filter(id => !S.names.has(id));
     el.innerHTML = `<div class="row"><input aria-label="Nome sessione" style="flex:1;min-width:0"><button class="go-mix main-act">Ascolta, mixa ed esporta</button><button class="xfer" title="Salva la sessione in un file .onair per aprirla su un altro dispositivo">⬇ Trasferisci</button><button class="del danger">Elimina</button></div>
       <div class="meta"><span>${new Date(s.created).toLocaleString('it-IT')}</span><span>${fmt(dur, false)}</span><span>re-take: ${s.retakes}</span><span>${s.video && s.video.nGroups ? 'audio + video ' + s.video.h + 'p' : 'solo audio'}</span><span>${s.status === 'done' ? 'completa' : 'interrotta (recuperata)'}</span></div>
@@ -1667,12 +1873,13 @@ function openExport(el, s) {
   document.querySelectorAll('#sessList .exp').forEach(b => { b.hidden = true; });
   if (PV) { PV.destroy(); PV = null; }
   box.hidden = false;
-  const dur = s.len / s.sr;
+  const dur = sessDur(s);
   const hasV = s.video && s.video.nGroups > 0;
   const ytOn = S.settings.plat.yt.ch === '1';
   if (ytOn && !s.chapters) s.chapters = autoChapters(s);
   box.innerHTML = `${hasV ? `<canvas class="pvv" width="${s.video.w}" height="${s.video.h}"></canvas>` : ''}<div class="pv"><button class="pv-play" aria-label="Ascolta">▶</button><input type="range" class="pv-seek" min="0" max="${dur.toFixed(2)}" step="0.1" value="0" aria-label="Posizione"><output class="pv-t">00:00:00 / ${fmt(dur, false)}</output></div>
     <p class="note" style="margin:0">Anteprima del mix: muovi i livelli mentre ascolti. Qui il volume non è ancora normalizzato: il file esportato suonerà più forte.</p>
+    <div class="row"><button class="ed-open main-act" title="Timeline a tracce: taglia, sposta, dividi, volumi e dissolvenze">🎬 Montaggio</button>${!isIdentity(s) || (s.vmutes || []).length ? '<span class="note">Sessione montata · durata ' + fmt(dur, false) + '</span>' : ''}</div>
     <div class="strips"></div>
     ${ytOn ? `<h4 style="margin:6px 0 0;font:700 12px var(--f-display);letter-spacing:.16em;color:var(--violet)">CAPITOLI YOUTUBE</h4>
     <div class="chaps" style="display:flex;flex-direction:column;gap:6px"></div>
@@ -1698,6 +1905,7 @@ function openExport(el, s) {
   if (s.video && s.video.nGroups > 0) { const o = document.createElement('option'); o.value = 'webm'; o.textContent = 'Video WebM (YouTube)'; box.querySelector('.fmt').append(o); }
   if (typeof lamejs === 'undefined') { box.querySelector('.fmt').value = 'wav'; box.querySelectorAll('.fmt option').forEach(o => { if (o.value !== 'wav' && o.value !== 'webm') o.disabled = true; }); }
   const saveS = () => DB.put('sessions', s.id, s);
+  box.querySelector('.ed-open').addEventListener('click', () => ED.start(s, box));
   // Capitoli
   if (ytOn) {
     const list = box.querySelector('.chaps'), warn = box.querySelector('.ch-warn');
@@ -1837,6 +2045,256 @@ async function importSessionFile(file) {
     toast('Sessione importata: «' + head.label + '»'); openSessions(sid);
   } catch (e) { console.error(e); toast('Non riesco a importare: ' + e.message); }
 }
+
+/* ------------------------------------------------------------------ Montaggio: timeline a tracce */
+const TRK = [
+  { ch: 'voice', label: 'VOCE', h: 96 }, { ch: 'intro', label: 'SIGLA', h: 46 }, { ch: 'bg', label: 'SOTTOFONDO', h: 46 }, { ch: 'cap', label: 'CAPITOLI', h: 46 }
+];
+const CHC = () => { const cs = getComputedStyle(document.documentElement); return { voice: cs.getPropertyValue('--c-voice').trim() || '#00e5ff', intro: cs.getPropertyValue('--c-intro').trim() || '#ff2bd6', bg: cs.getPropertyValue('--c-bg').trim() || '#ffe600', cap: cs.getPropertyValue('--c-cap').trim() || '#38ff7a' }; };
+const ED = {
+  open: false, s: null, cv: null, g: null, HW: 118, RH: 30, x0: 0, pps: 20, ph: 0, sel: null, selSeg: null, selCh: null, drag: null, undo: [], redo: [], peaks: null, peaksFor: null, dirty: true, saveT: null,
+  async start(s, box) {
+    this.s = s; this.box = box; this.open = true; this.sel = null; this.selSeg = null; this.selCh = null; this.undo = []; this.redo = [];
+    $('edModal').hidden = false; $('edName').textContent = s.name;
+    const pvv = box.querySelector('.pvv'); this.pvv = pvv; if (pvv) { $('edVidHost').append(pvv); $('edVidHost').hidden = false; } else $('edVidHost').hidden = true;
+    this.cv = $('edCanvas'); this.g = this.cv.getContext('2d'); this.resize();
+    if (this.peaksFor !== s.id) { this.peaks = null; $('edMsg').textContent = 'Preparo la forma d\'onda…'; await this.buildPeaks(); this.peaksFor = s.id; }
+    $('edMsg').textContent = '';
+    this.fit(); this.ph = PV ? PV.position() : 0; this.renderInsp(); this.dirty = true;
+  },
+  close() {
+    this.open = false; $('edModal').hidden = true; if (PV && PV.playing) PV.stop();
+    if (this.pvv && this.box) this.box.prepend(this.pvv);
+    clearTimeout(this.saveT); DB.put('sessions', this.s.id, this.s);
+    openSessions(this.s.id);
+  },
+  async buildPeaks() {
+    const s = this.s, sr = s.sr, n = Math.ceil(s.len / sr * 100), pk = new Float32Array(n), per = sr / 100;
+    for (let i = 0; i * sr < s.len; i++) {
+      const d = await DB.get('chunks', ckey(s.id, i)); if (!d) continue;
+      for (let j = 0; j < d.length; j++) { const k = Math.floor((i * sr + j) / per), a = Math.abs(d[j]) / 32768; if (a > pk[k]) pk[k] = a; }
+      if (i % 30 === 0) { $('edMsg').textContent = `Preparo la forma d'onda… ${Math.round(i * sr / s.len * 100)}%`; await new Promise(r => setTimeout(r, 0)); }
+    }
+    this.peaks = pk;
+  },
+  resize() {
+    const r = this.cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    this.W = Math.max(320, r.width); this.H = this.RH + TRK.reduce((a, t) => a + t.h, 0) + 8;
+    this.cv.width = this.W * dpr; this.cv.height = this.H * dpr; this.cv.style.height = this.H + 'px'; this.g.setTransform(dpr, 0, 0, dpr, 0, 0); this.dirty = true;
+  },
+  dur() { return sessDur(this.s); },
+  fit() { this.pps = Math.max(0.5, (this.W - this.HW - 10) / Math.max(1, this.dur())); this.x0 = 0; this.syncScroll(); },
+  zoom(f, atX) { const t = atX != null ? this.xToT(atX) : this.ph; this.pps = Math.max(0.5, Math.min(800, this.pps * f)); this.x0 = Math.max(0, t - ((atX ?? (this.HW + (this.W - this.HW) / 2)) - this.HW) / this.pps); this.clampX(); this.syncScroll(); this.dirty = true; },
+  clampX() { const vis = (this.W - this.HW) / this.pps; this.x0 = Math.max(0, Math.min(Math.max(0, this.dur() - vis * 0.9), this.x0)); },
+  syncScroll() { const sc = $('edScroll'), vis = (this.W - this.HW) / this.pps; sc.max = Math.max(0, this.dur() - vis * 0.9).toFixed(2); sc.value = this.x0; sc.disabled = +sc.max <= 0; },
+  tToX(t) { return this.HW + (t - this.x0) * this.pps; },
+  xToT(x) { return Math.max(0, Math.min(this.dur(), this.x0 + (x - this.HW) / this.pps)); },
+  trackAt(y) { let yy = this.RH; for (const t of TRK) { if (y >= yy && y < yy + t.h) return { ...t, y: yy }; yy += t.h; } return null; },
+  trackY(ch) { let yy = this.RH; for (const t of TRK) { if (t.ch === ch) return yy; yy += t.h; } return 0; },
+  segsOf(ch) { return this.s.segs.filter(g => g.ch === ch); },
+  segAt(ch, x) { const t = this.xToT(x); const L = this.segsOf(ch); for (let i = L.length - 1; i >= 0; i--) { const g = L[i]; if (t >= g.tStart && t <= g.tEnd) return g; } return null; },
+  push() { this.undo.push(EDIT.snap(this.s)); if (this.undo.length > 60) this.undo.shift(); this.redo = []; },
+  changed() {
+    this.dirty = true; clearTimeout(this.saveT); this.saveT = setTimeout(() => DB.put('sessions', this.s.id, this.s), 500);
+    if (PV) { const was = PV.playing, p = PV.position(); PV.invalidate(); if (was) PV.play(Math.min(p, this.dur() - 0.1)); }
+    this.ph = Math.min(this.ph, this.dur()); this.clampX(); this.syncScroll(); this.renderInsp();
+  },
+  doUndo() { if (!this.undo.length) return; this.redo.push(EDIT.snap(this.s)); EDIT.restore(this.s, this.undo.pop()); this.selSeg = null; this.changed(); toast('Annullato'); },
+  doRedo() { if (!this.redo.length) return; this.undo.push(EDIT.snap(this.s)); EDIT.restore(this.s, this.redo.pop()); this.selSeg = null; this.changed(); },
+  seek(t) { this.ph = Math.max(0, Math.min(this.dur(), t)); if (PV) { PV.pos = this.ph; if (PV.playing) PV.play(this.ph); else PV.seekVideo(this.ph); } this.dirty = true; this.renderInsp(); },
+  togglePlay() { if (!PV) return; if (PV.playing) { PV.stop(); this.ph = PV.pos; } else PV.play(this.ph); },
+  /* ----- azioni */
+  cutSel() { if (!this.sel) return; const { a, b } = this.sel; this.push(); EDIT.cut(this.s, a, b); this.sel = null; this.seek(a); this.changed(); toast(`Tagliati ${(b - a).toFixed(1)} s`); },
+  muteSel(on) { if (!this.sel) return; this.push(); if (on) EDIT.mute(this.s, this.sel.a, this.sel.b); else EDIT.unmute(this.s, this.sel.a, this.sel.b); this.changed(); },
+  delSeg() { const g = this.selSeg; if (!g) return; this.push(); this.s.segs.splice(this.s.segs.indexOf(g), 1); this.selSeg = null; this.changed(); },
+  splitSeg() {
+    let g = this.selSeg; if (!g || !(this.ph > g.tStart && this.ph < g.tEnd)) { g = this.s.segs.find(x => x.ch !== 'voice' && this.ph > x.tStart + 0.05 && this.ph < x.tEnd - 0.05 && (!this.selCh || x.ch === this.selCh)); }
+    if (!g) return toast('Metti il cursore sopra un blocco musicale per dividerlo');
+    this.push(); const r = EDIT.split(this.s, g, this.ph); if (r) { this.selSeg = r; this.changed(); toast('Blocco diviso'); }
+  },
+  addChapter() { this.s.chapters = this.s.chapters || autoChapters(this.s); this.push(); this.s.chapters.push({ t: Math.floor(this.ph), title: 'Nuovo capitolo' }); this.s.chapters.sort((a, b) => a.t - b.t); this.selChap = this.s.chapters.find(c => c.t === Math.floor(this.ph)); this.changed(); },
+  /* ----- input */
+  down(e) {
+    const r = this.cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top; if (x < this.HW) return;
+    this.cv.setPointerCapture(e.pointerId);
+    if (y < this.RH) {
+      const ch = (this.s.chapters || []).find(c => Math.abs(this.tToX(c.t) - x) < 7 && y > this.RH - 16);
+      if (ch) { this.push(); this.drag = { kind: 'chap', c: ch, x0: x }; this.selChap = ch; this.selSeg = null; this.renderInsp(); return; }
+      this.drag = { kind: 'ruler', x0: x, t0: this.xToT(x) }; return;
+    }
+    const tr = this.trackAt(y); if (!tr) return;
+    if (tr.ch === 'voice') { this.drag = { kind: 'range', x0: x, t0: this.xToT(x) }; this.selSeg = null; this.selCh = 'voice'; return; }
+    const g = this.segAt(tr.ch, x); this.selCh = tr.ch; this.selChap = null;
+    if (!g) { this.selSeg = null; this.drag = { kind: 'range', x0: x, t0: this.xToT(x) }; this.renderInsp(); this.dirty = true; return; }
+    this.selSeg = g; this.sel = null; const xs = this.tToX(g.tStart), xe = this.tToX(g.tEnd);
+    const mode = x - xs < 8 ? 'trimL' : xe - x < 8 ? 'trimR' : 'move';
+    this.drag = { kind: mode, g, x0: x, st: g.tStart, en: g.tEnd, off: g.off, snap: EDIT.snap(this.s), moved: false };
+    this.renderInsp(); this.dirty = true;
+  },
+  move(e) {
+    const r = this.cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, d = this.drag;
+    if (!d) { const tr = this.trackAt(y); let cur = 'default'; if (x > this.HW && tr && tr.ch !== 'voice') { const g = this.segAt(tr.ch, x); if (g) { const xs = this.tToX(g.tStart), xe = this.tToX(g.tEnd); cur = (x - xs < 8 || xe - x < 8) ? 'ew-resize' : 'grab'; } } else if (x > this.HW && y > this.RH) cur = 'text'; this.cv.style.cursor = cur; return; }
+    const dt = (x - d.x0) / this.pps; if (Math.abs(x - d.x0) > 3) d.moved = true;
+    const snapT = (t) => { const cand = [this.ph, 0, ...this.s.segs.filter(o => o !== d.g).flatMap(o => [o.tStart, o.tEnd])]; for (const c of cand) if (Math.abs(this.tToX(c) - this.tToX(t)) < 7) return c; return t; };
+    if (d.kind === 'ruler' || d.kind === 'range') { if (d.moved) { const t = this.xToT(x); this.sel = { a: Math.min(t, d.t0), b: Math.max(t, d.t0) }; } }
+    else if (d.kind === 'chap') { d.c.t = Math.max(0, Math.floor(this.xToT(x))); }
+    else if (d.kind === 'move') { const len = d.en - d.st; let ns = Math.max(0, d.st + dt); ns = snapT(ns); const ne = snapT(ns + len); if (ne !== ns + len) ns = ne - len; d.g.tStart = Math.max(0, ns); d.g.tEnd = d.g.tStart + len; }
+    else if (d.kind === 'trimL') { let ns = snapT(Math.min(d.en - 0.1, Math.max(0, d.st + dt))); if (d.off + (ns - d.st) < 0) ns = d.st - d.off; d.g.tStart = ns; d.g.off = d.off + (ns - d.st); }
+    else if (d.kind === 'trimR') { const buf = E.buffers.get(d.g.fileId), max = buf ? d.g.tStart + (buf.duration - d.g.off) : Infinity; d.g.tEnd = Math.min(max, Math.max(d.g.tStart + 0.1, snapT(d.en + dt))); }
+    this.dirty = true;
+  },
+  up(e) {
+    const d = this.drag; this.drag = null; if (!d) return;
+    if (d.kind === 'ruler' || d.kind === 'range') { if (!d.moved) { this.sel = null; this.seek(d.t0); } this.renderInsp(); this.dirty = true; return; }
+    if (d.kind === 'chap') { this.s.chapters.sort((a, b) => a.t - b.t); this.changed(); return; }
+    if (d.moved) { this.undo.push(d.snap); this.redo = []; this.changed(); } else { this.seek(this.xToT(d.x0)); }
+  },
+  wheel(e) {
+    e.preventDefault(); const r = this.cv.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) this.zoom(e.deltaY < 0 ? 1.25 : 0.8, e.clientX - r.left);
+    else { this.x0 += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) / this.pps; this.clampX(); this.syncScroll(); this.dirty = true; }
+  },
+  key(e) {
+    if (!this.open) return; const tg = e.target; if (tg && (tg.tagName === 'INPUT' && tg.type !== 'range' || tg.tagName === 'TEXTAREA' || tg.tagName === 'SELECT')) return;
+    const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? this.doRedo() : this.doUndo(); return; }
+    if (ctrl && k.toLowerCase() === 'y') { e.preventDefault(); this.doRedo(); return; }
+    if (ctrl) return;
+    if (k === ' ') { e.preventDefault(); this.togglePlay(); }
+    else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); if (this.sel) this.cutSel(); else if (this.selSeg) this.delSeg(); }
+    else if (k.toLowerCase() === 's') this.splitSeg();
+    else if (k.toLowerCase() === 'm') { if (this.sel) this.muteSel(true); }
+    else if (k.toLowerCase() === 'c') this.addChapter();
+    else if (k === 'ArrowLeft') { e.preventDefault(); this.seek(this.ph - (e.shiftKey ? 5 : 1)); }
+    else if (k === 'ArrowRight') { e.preventDefault(); this.seek(this.ph + (e.shiftKey ? 5 : 1)); }
+    else if (k === 'Home') this.seek(0);
+    else if (k === '+') this.zoom(1.4); else if (k === '-') this.zoom(0.7);
+    else if (k === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); if (this.sel || this.selSeg) { this.sel = null; this.selSeg = null; this.renderInsp(); this.dirty = true; } else this.close(); }
+  },
+  /* ----- pannello sotto la timeline */
+  renderInsp() {
+    const box = $('edInsp'); box.replaceChildren(); const s = this.s;
+    const btn = (t, fn, cls = '', title = '') => { const b = document.createElement('button'); b.textContent = t; if (cls) b.className = cls; if (title) b.title = title; b.addEventListener('click', fn); return b; };
+    const row = () => { const r = document.createElement('div'); r.className = 'row'; box.append(r); return r; };
+    const info = (t) => { const p = document.createElement('div'); p.className = 'ed-info'; p.textContent = t; box.append(p); };
+    if (this.selSeg) {
+      const g = this.selSeg, nm = (s.names && s.names[g.fileId]) || S.names.get(g.fileId) || 'file';
+      info(`${CH_LABEL[g.ch]} · ${nm} · da ${fmt(g.tStart)} · durata ${(g.tEnd - g.tStart).toFixed(1)} s`);
+      const kn = document.createElement('div'); kn.className = 'knobs'; box.append(kn);
+      const slider = (label, key, min, max, step, unit, def) => {
+        const id = 'ed-' + key, l = document.createElement('label'); l.htmlFor = id; l.textContent = label;
+        const r = document.createElement('input'); r.type = 'range'; r.id = id; r.min = min; r.max = max; r.step = step; r.value = g[key] ?? def;
+        const o = document.createElement('output'); const show = () => { o.textContent = (key === 'gain' && +r.value > 0 ? '+' : '') + (+r.value).toFixed(key === 'gain' ? 1 : 1) + unit; }; show();
+        let snapped = false; r.addEventListener('pointerdown', () => { if (!snapped) { this.push(); snapped = true; } });
+        r.addEventListener('input', () => { g[key] = +r.value; show(); this.dirty = true; });
+        r.addEventListener('change', () => { snapped = false; this.changed(); });
+        kn.append(l, r, o);
+      };
+      slider('Volume del blocco', 'gain', -24, 12, 0.5, ' dB', 0);
+      slider('Dissolvenza in entrata', 'fin', 0, Math.min(15, (g.tEnd - g.tStart) / 2), 0.1, ' s', 0);
+      slider('Dissolvenza in uscita', 'fout', 0, Math.min(15, (g.tEnd - g.tStart) / 2), 0.1, ' s', 0);
+      const r = row(); r.append(btn('✂ Dividi al cursore (S)', () => this.splitSeg()), btn('🗑 Elimina blocco (Canc)', () => this.delSeg(), 'danger'));
+    } else if (this.selChap) {
+      const c = this.selChap; info(`Capitolo YouTube a ${fmtCh(c.t)}`);
+      const r = row(); const inp = document.createElement('input'); inp.value = c.title; inp.className = 'ed-in'; inp.setAttribute('aria-label', 'Titolo capitolo');
+      inp.addEventListener('change', () => { this.push(); c.title = inp.value; this.changed(); });
+      r.append(inp, btn('🗑 Elimina capitolo', () => { this.push(); s.chapters.splice(s.chapters.indexOf(c), 1); this.selChap = null; this.changed(); }, 'danger'));
+    } else if (this.sel) {
+      const { a, b } = this.sel; info(`Selezione: ${fmt(a)} → ${fmt(b)} (${(b - a).toFixed(1)} s)`);
+      const r = row();
+      r.append(btn('✂ Taglia: elimina questo tratto (Canc)', () => this.cutSel(), 'go', 'Toglie il tratto da voce, musica e video: tutto quello che segue si sposta indietro'),
+        btn('🔇 Silenzia la voce (M)', () => this.muteSel(true)), btn('🔊 Riattiva la voce', () => this.muteSel(false)),
+        btn('▶ Ascolta', () => { if (PV) { PV.play(a); clearTimeout(this.stopT); this.stopT = setTimeout(() => { if (PV.playing) PV.stop(); }, (b - a) * 1000 + 150); } }),
+        btn('Annulla selezione', () => { this.sel = null; this.renderInsp(); this.dirty = true; }));
+    } else {
+      info('Clicca per spostare il cursore · trascina sulla voce o sul righello per selezionare un tratto · trascina i blocchi per spostarli, i bordi per accorciarli · rotellina per scorrere, Ctrl+rotellina per lo zoom.');
+      const r = row(); r.append(btn('✂ Dividi blocco al cursore (S)', () => this.splitSeg()), btn('🏁 Capitolo al cursore (C)', () => this.addChapter()));
+    }
+    $('edUndo').disabled = !this.undo.length; $('edRedo').disabled = !this.redo.length;
+    $('edLen').textContent = 'durata ' + fmt(this.dur(), false) + (isIdentity(s) && !(s.vmutes || []).length ? '' : ' · montata');
+  },
+  /* ----- disegno */
+  frame() {
+    if (PV && PV.playing) { this.ph = PV.position(); const xp = this.tToX(this.ph); if (xp > this.W - 30) { this.x0 = this.ph - 20 / this.pps; this.clampX(); this.syncScroll(); } this.dirty = true; }
+    $('edTime').textContent = fmt(this.ph); $('edPlay').textContent = PV && PV.playing ? '❚❚' : '▶';
+    if (!this.dirty) return; this.dirty = false; this.draw();
+  },
+  draw() {
+    const g = this.g, W = this.W, H = this.H, HW = this.HW, RH = this.RH, C = CHC(), D = this.dur(), s = this.s;
+    g.fillStyle = '#05080f'; g.fillRect(0, 0, W, H);
+    // righello
+    g.fillStyle = '#0a1220'; g.fillRect(HW, 0, W - HW, RH);
+    const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800]; const st = steps.find(x => x * this.pps >= 70) || 3600;
+    g.font = '11px "JetBrains Mono", monospace'; g.textBaseline = 'top';
+    for (let t = Math.floor(this.x0 / st) * st; t <= Math.min(D, this.x0 + (W - HW) / this.pps); t += st) {
+      const x = this.tToX(t); if (x < HW) continue; g.fillStyle = '#2a3a55'; g.fillRect(x, RH - 10, 1, 10); g.fillRect(x, RH, 1, H - RH);
+      g.fillStyle = '#7f95b5'; g.fillText(fmtCh(t) + (st < 1 ? '.' + Math.round((t % 1) * 10) : ''), x + 3, 4);
+    }
+    // tracce
+    let y = RH;
+    for (const tr of TRK) {
+      const col = C[tr.ch]; g.fillStyle = tr.ch === this.selCh ? '#0c1626' : '#08101c'; g.fillRect(HW, y, W - HW, tr.h);
+      g.fillStyle = '#0b1322'; g.fillRect(0, y, HW, tr.h); g.fillStyle = col; g.fillRect(0, y, 5, tr.h);
+      g.fillStyle = '#d5f4ff'; g.font = '700 11px Orbitron, sans-serif'; g.textBaseline = 'middle'; g.fillText(tr.label, 12, y + tr.h / 2);
+      g.fillStyle = '#16233a'; g.fillRect(0, y + tr.h - 1, W, 1);
+      g.save(); g.beginPath(); g.rect(HW, y, W - HW, tr.h); g.clip();
+      if (tr.ch === 'voice') this.drawVoice(g, y, tr.h, col);
+      else for (const sg of this.segsOf(tr.ch)) this.drawSeg(g, sg, y, tr.h, col);
+      g.restore(); y += tr.h;
+    }
+    // selezione
+    if (this.sel) { const xa = this.tToX(this.sel.a), xb = this.tToX(this.sel.b); g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(Math.max(HW, xa), 0, xb - Math.max(HW, xa), H); g.fillStyle = '#ffffff'; g.fillRect(xa, 0, 1, H); g.fillRect(xb, 0, 1, H); }
+    // capitoli
+    for (const c of s.chapters || []) {
+      const x = this.tToX(c.t); if (x < HW - 2 || x > W) continue;
+      g.fillStyle = c === this.selChap ? '#ffffff' : C.cap; g.beginPath(); g.moveTo(x, RH - 15); g.lineTo(x + 11, RH - 10); g.lineTo(x, RH - 5); g.closePath(); g.fill(); g.fillRect(x, RH - 15, 1.5, H - RH + 15);
+      g.font = '600 10px "Exo 2", sans-serif'; g.textBaseline = 'middle'; g.fillText(c.title.slice(0, 22), x + 13, RH - 10);
+    }
+    // fine e cursore
+    const xe = this.tToX(D); if (xe < W) { g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(xe, RH, W - xe, H - RH); }
+    const xp = this.tToX(this.ph); if (xp >= HW) { g.fillStyle = '#ffffff'; g.fillRect(xp - 1, 0, 2, H); g.beginPath(); g.moveTo(xp - 6, 0); g.lineTo(xp + 6, 0); g.lineTo(xp, 8); g.fill(); }
+    g.fillStyle = '#0b1322'; g.fillRect(0, 0, HW, RH); g.fillStyle = '#6f87a6'; g.font = '600 10px "Exo 2", sans-serif'; g.textBaseline = 'middle'; g.fillText('TEMPO', 12, RH / 2);
+  },
+  drawVoice(g, y, h, col) {
+    const s = this.s, pk = this.peaks, mid = y + h / 2; if (!pk) return;
+    const x1 = Math.min(this.W, this.tToX(this.dur()));
+    g.fillStyle = col;
+    for (let x = this.HW; x < x1; x++) {
+      const ta = this.xToT(x), tb = this.xToT(x + 1); const sa = outToSrc(s, ta); if (sa == null) continue;
+      const n = Math.max(1, Math.round((tb - ta) * 100)), k0 = Math.floor(sa * 100); let p = 0;
+      for (let k = k0; k < k0 + n && k < pk.length; k++) if (pk[k] > p) p = pk[k];
+      const hh = Math.max(1, Math.min(1, p * 1.8) * (h / 2 - 6)); g.fillRect(x, mid - hh, 1, hh * 2);
+    }
+    for (const m of s.vmutes || []) { const xa = Math.max(this.HW, this.tToX(m.a)), xb = this.tToX(m.b); g.fillStyle = 'rgba(5,8,15,0.75)'; g.fillRect(xa, y, xb - xa, h); g.fillStyle = '#ff4d6d'; g.font = '600 10px "Exo 2", sans-serif'; g.textBaseline = 'top'; if (xb - xa > 50) g.fillText('🔇 silenzio', xa + 4, y + 4); }
+    if (!isIdentity(s)) for (const p of vmapOf(s).slice(1)) { const x = this.tToX(p.o); g.fillStyle = '#ff4d6d'; g.fillRect(x - 1, y, 2, h); }
+  },
+  drawSeg(g, sg, y, h, col) {
+    const xa = this.tToX(sg.tStart), xb = this.tToX(sg.tEnd); if (xb < this.HW || xa > this.W) return;
+    const top = y + 4, hh = h - 8, w = Math.max(2, xb - xa);
+    g.globalAlpha = 0.28; g.fillStyle = col; g.fillRect(xa, top, w, hh); g.globalAlpha = 1;
+    g.strokeStyle = sg === this.selSeg ? '#ffffff' : col; g.lineWidth = sg === this.selSeg ? 2 : 1; g.strokeRect(xa + 0.5, top + 0.5, w - 1, hh - 1);
+    g.fillStyle = col; g.beginPath(); // dissolvenze
+    if (sg.fin > 0) { const xf = Math.min(xb, xa + sg.fin * this.pps); g.moveTo(xa, top + hh); g.lineTo(xf, top); g.lineTo(xa, top); g.closePath(); g.globalAlpha = 0.5; g.fill(); g.globalAlpha = 1; }
+    g.beginPath(); if (sg.fout > 0) { const xf = Math.max(xa, xb - sg.fout * this.pps); g.moveTo(xb, top + hh); g.lineTo(xf, top); g.lineTo(xb, top); g.closePath(); g.globalAlpha = 0.5; g.fill(); g.globalAlpha = 1; }
+    if (w > 40) {
+      const nm = ((this.s.names && this.s.names[sg.fileId]) || S.names.get(sg.fileId) || '').replace(/\.[^.]+$/, '');
+      g.fillStyle = '#ffffff'; g.font = '600 11px "Exo 2", sans-serif'; g.textBaseline = 'middle';
+      g.fillText((sg.gain ? (sg.gain > 0 ? '+' : '') + sg.gain + ' dB · ' : '') + nm, Math.max(xa, this.HW) + 6, top + hh / 2, w - 10);
+    }
+  },
+  wire() {
+    const cv = $('edCanvas');
+    cv.addEventListener('pointerdown', (e) => this.down(e)); cv.addEventListener('pointermove', (e) => this.move(e)); cv.addEventListener('pointerup', (e) => this.up(e));
+    cv.addEventListener('wheel', (e) => this.wheel(e), { passive: false });
+    $('edScroll').addEventListener('input', (e) => { this.x0 = +e.target.value; this.dirty = true; });
+    $('edPlay').addEventListener('click', () => this.togglePlay());
+    $('edUndo').addEventListener('click', () => this.doUndo()); $('edRedo').addEventListener('click', () => this.doRedo());
+    $('edZoomIn').addEventListener('click', () => this.zoom(1.5)); $('edZoomOut').addEventListener('click', () => this.zoom(0.66)); $('edFit').addEventListener('click', () => { this.fit(); this.dirty = true; });
+    $('edClose').addEventListener('click', () => this.close());
+    document.addEventListener('keydown', (e) => this.key(e), true);
+    window.addEventListener('resize', () => { if (this.open) { this.resize(); this.clampX(); this.syncScroll(); } });
+  }
+};
 
 /* Capitoli YouTube */
 function fmtCh(t) { t = Math.max(0, Math.floor(t)); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`; }
@@ -2009,6 +2467,7 @@ document.addEventListener('keydown', (e) => {
   const tg = e.target; if (tg && (tg.tagName === 'INPUT' && tg.type !== 'range' && tg.type !== 'checkbox' || tg.tagName === 'SELECT' || tg.tagName === 'TEXTAREA')) return;
   if (!E.ctx || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
+  if (ED.open) return;
   const anyModal = !$('sessModal').hidden || !$('setModal').hidden || !$('clModal').hidden || !$('devModal').hidden;
   if (k === 'Escape') { closeSessions(); for (const m of ['setModal', 'clModal']) $(m).hidden = true; if (!$('devModal').hidden) DEV.close(); if (R.state === 'hold') { stopListen(); setHoldN(0); } e.preventDefault(); return; }
   if (anyModal) return;
@@ -2144,6 +2603,7 @@ function wire() {
   $('ovLogoSize').addEventListener('input', (e) => { ov.logoSize = +e.target.value; saveSettings(); syncOv(); });
   $('ovLogoOp').addEventListener('input', (e) => { ov.logoOp = +e.target.value; saveSettings(); syncOv(); });
   $('ovSub').addEventListener('click', () => SUB.start());
+  ED.wire();
   // Backup e trasferimento
   let onairMode = 'studio';
   $('bkSave').addEventListener('click', () => exportStudio());
@@ -2170,7 +2630,7 @@ function wire() {
   };
   syncFrameUI();
   const endEdit = () => { CAM.edit = null; box.classList.remove('editing'); areaBox.hidden = true; hint.hidden = true; };
-  const relPos = (e) => { const r = $('vOut').getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; };
+  const relPos = (e) => { const r = $('vBox').getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; };
   const startEdit = (mode) => {
     if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma');
     if (!CAM.ok) return toast('Webcam non attiva');
@@ -2206,7 +2666,10 @@ function wire() {
   $('vOn').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva o disattiva il video a registrazione ferma'); vs.on = !vs.on; saveSettings(); renderStatus(); });
   if (!V.codec) { $('vOn').disabled = true; $('vOn').title = 'Questo browser non sa registrare video: usa Chrome o Edge aggiornati'; vs.on = false; }
 
-  meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes });
+  const mkLive = () => { meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = S.settings.mixStyle === 'compact' ? '⇄ Vista console' : '⇄ Vista compatta'; $('setMixStyle').value = S.settings.mixStyle || 'console'; };
+  mkLive();
+  $('mixStyleBtn').addEventListener('click', () => { S.settings.mixStyle = S.settings.mixStyle === 'compact' ? 'console' : 'compact'; saveSettings(); mkLive(); });
+  $('setMixStyle').addEventListener('change', (e) => { S.settings.mixStyle = e.target.value; saveSettings(); mkLive(); });
 }
 
 /* Avvio */

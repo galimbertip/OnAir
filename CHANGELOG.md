@@ -7,6 +7,24 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.0.0 — 08/11/2026
+Nuova versione maggiore: montaggio e nuova grafica.
+
+**Montaggio** (Sessioni → «🎬 Montaggio»)
+- Timeline a tracce: voce con forma d'onda, sigla, sottofondo, capitoli; righello, cursore, zoom (Ctrl+rotellina, + −, Adatta), scorrimento, display del tempo.
+- Blocchi musicali: trascinali per spostarli, tira i bordi per accorciarli, dividili al cursore (S), eliminali (Canc). Per ogni blocco: volume (−24…+12 dB), dissolvenza in entrata e in uscita.
+- Selezione di un tratto (trascinando sulla voce o sul righello): «Taglia» lo elimina da voce, musica e video insieme e tutto quello che segue si sposta indietro; «Silenzia la voce» toglie solo la voce in quel tratto (tosse, rumori).
+- Capitoli YouTube come bandierine sul righello: trascinabili, rinominabili, aggiungibili al cursore (C).
+- Annulla / ripristina (Ctrl+Z / Ctrl+Shift+Z), anteprima con video, tutto salvato da solo.
+- Il montaggio non distrugge niente: la registrazione originale resta com'è. All'esportazione il video tagliato viene ricodificato.
+
+**Mixer**
+- Due viste a scelta (pulsante nel mixer o Impostazioni): console con fader verticali e indicatori con scala in dB e picco, oppure compatta.
+- Curva dell'EQ disegnata in ogni fonte (clic per aprire le regolazioni).
+- «Livello voce»: misura dal vivo in LUFS di come suonerà la voce nel file, con indicazione basso / buono / alto.
+
+**Colori**: voce ciano, sigla magenta, sottofondo giallo, capitoli verde, ripetuti in mixer, pannelli e timeline.
+
 ## V2.9.0 — 08/11/2026
 **Backup e trasferimento tra dispositivi**
 - Impostazioni → Backup e trasferimento: «⬇ Salva lo studio in un file» (sigla, sottofondi, capitoli, testo, logo, sfondo, mixer, disposizioni, tasti, piattaforme) e «⬆ Carica uno studio» su un altro dispositivo. Microfono, uscita e webcam restano quelli del dispositivo.
@@ -115,4 +133,4 @@ Nasce **OnAir**, web app GPverse che sostituisce Python + OBS + Audacity per l'a
 PG_PodcastDeck originale (Python + PyQt5 + pygame, comandava OBS via WebSocket). Resta nella cartella superiore com'era.
 
 ## In arrivo
-- Idee: teleprompter che segue la voce; nuova grafica in stile mixer professionale
+- Idee: teleprompter che segue la voce; automazioni di volume disegnate sulla timeline

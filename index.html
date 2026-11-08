@@ -18,6 +18,7 @@
   --cyan:#3ae8ff; --cyan-d:#1597b0; --violet:#8d7bff; --violet-d:#5a4bd1;
   --text:#d5f4ff; --dim:#6f87a6; --faint:#3a4c66;
   --rec:#ff3d6e; --warn:#ffc04a; --ok:#3affb0;
+  --c-voice:#00e5ff; --c-intro:#ff2bd6; --c-bg:#ffe600; --c-cap:#38ff7a;
   --f-display:'Orbitron','Exo 2',system-ui,sans-serif;
   --f-body:'Exo 2',system-ui,-apple-system,'Segoe UI',sans-serif;
   --f-mono:'JetBrains Mono',ui-monospace,'DejaVu Sans Mono',monospace;
@@ -110,6 +111,62 @@ button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .mixer{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .mixer h2{margin:0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet)}
 .strips{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.strip[data-ch=voice]{--cc:var(--c-voice)} .strip[data-ch=intro]{--cc:var(--c-intro)} .strip[data-ch=bg]{--cc:var(--c-bg)} .strip[data-ch=cap]{--cc:var(--c-cap)} .strip.master{--cc:#ffffff}
+.strip{border-top:3px solid var(--cc,var(--line))}
+.strip .dot{width:9px;height:9px;border-radius:50%;background:var(--cc);box-shadow:0 0 8px var(--cc);flex:none}
+.strip .h b{color:var(--cc)}
+.eqc{width:100%;height:36px;display:block;background:#02040a;border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.cs-main{display:flex;flex-direction:column;gap:6px}
+.mcol{display:flex;flex-direction:column;gap:3px}
+.mtr{width:100%;height:10px;display:block;border-radius:3px}
+.pk{font:600 11px var(--f-mono);color:var(--dim);font-variant-numeric:tabular-nums}
+.pk.clip{color:#fff;background:var(--rec);border-radius:3px;padding:0 3px}
+.cs-btns{display:flex;gap:6px}
+.cs-btns button{padding:3px 9px;font-size:12px}
+.fad .fl{white-space:nowrap}
+.strip.master .lufs{display:flex;align-items:baseline;gap:6px}
+.strip.master .lufs output{font:700 26px var(--f-mono);font-variant-numeric:tabular-nums}
+.strip.master .lufs small{color:var(--dim);font-size:11px}
+.lv-scale{display:none}
+#liveStrips:not(.console){grid-template-columns:repeat(5,minmax(0,1fr))}
+/* Vista console */
+.strips.console{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));align-items:stretch}
+.strips.console .strip{align-items:stretch}
+.strips.console .cs-main{flex-direction:row;justify-content:center;align-items:stretch;gap:10px;height:230px}
+.strips.console .mcol{align-items:center;width:34px}
+.strips.console .mtr{width:34px;height:auto;flex:1}
+.strips.console .fad{display:flex;flex-direction:column;align-items:center;gap:4px}
+.strips.console .fad .fl{display:none}
+.strips.console input.vol{writing-mode:vertical-lr;direction:rtl;width:34px;height:100%;flex:1;accent-color:var(--cc)}
+.strips.console .h{flex-wrap:wrap}
+.strips.console .cs-btns{justify-content:center}
+.strips.console .strip.master .lv-scale{display:flex;flex-direction:column;justify-content:space-between;font:600 10px var(--f-body);color:var(--dim);padding:20px 0 6px}
+.strips.console .inmic .fl{display:inline}
+#cardIntro{--cc:var(--c-intro)} #cardBg{--cc:var(--c-bg)} #cardCap{--cc:var(--c-cap)}
+#cardIntro h2,#cardBg h2,#cardCap h2{color:var(--cc)}
+#cardIntro,#cardBg,#cardCap{border-top:3px solid var(--cc)}
+.list li.play{background:color-mix(in srgb,var(--cc) 16%,transparent)}
+/* Montaggio */
+#edModal.edm{place-items:start stretch;z-index:45}
+.ed{background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:100%}
+.ed-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ed-top h3{margin:0;font:700 15px var(--f-display);letter-spacing:.12em;color:var(--cyan)}
+.ed-name{color:var(--dim);font-size:13px;max-width:30ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ed-top .sp{flex:1}
+.lcd{display:flex;flex-direction:column;align-items:center;background:#02040a;border:1px solid var(--line);border-radius:8px;padding:4px 14px;margin:0 6px}
+.lcd span{font:700 22px var(--f-mono);color:var(--cyan);text-shadow:0 0 10px rgba(58,232,255,.45);font-variant-numeric:tabular-nums}
+.lcd small{font-size:10px;color:var(--dim)}
+.ed-play{width:48px;height:42px;font-size:18px}
+.ed-body{display:flex;gap:12px;align-items:flex-start}
+.ed-tl{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ed-tl canvas{width:100%;display:block;border:1px solid var(--line);border-radius:10px;touch-action:none}
+.ed-side{width:min(320px,32%);flex:none}
+.ed-side canvas{width:100%}
+.ed-insp{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--panel2);display:flex;flex-direction:column;gap:8px;min-height:64px}
+.ed-info{font:600 13px var(--f-body);color:var(--text)}
+.ed-insp .knobs{grid-template-columns:auto minmax(0,1fr) 4.6em;max-width:560px}
+.ed-in{flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:7px 10px}
+@media (max-width:900px){.ed-body{flex-direction:column}.ed-side{width:100%}}
 .strip{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .strip .h{display:flex;align-items:center;gap:8px}
 .strip .h b{font:700 11px var(--f-display);letter-spacing:.16em;flex:1}
@@ -294,7 +351,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V2.9.0</span>
+    <span class="ver" id="bootVer">V3.0.0</span>
   </div>
 </div>
 
@@ -302,7 +359,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V2.9.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.0.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -433,14 +490,14 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     </section>
 
   <section class="mixer pnl" data-panel="mixer">
-    <h2>MIXER IN CUFFIA</h2>
+    <h2 style="display:flex;align-items:center;gap:10px">MIXER IN CUFFIA <span style="flex:1"></span><button id="mixStyleBtn" style="font:600 12px var(--f-body);letter-spacing:0;padding:5px 10px">⇄ Vista compatta</button></h2>
     <div class="strips" id="liveStrips"></div>
     <p class="note">Questi livelli valgono per l'ascolto e sono il punto di partenza del mix finale. Dopo la registrazione li ritocchi in Sessioni, con l'anteprima, prima di esportare. ↺ riporta la fonte al suo livello predefinito, che imposti con ★ dentro «Gain ed EQ». Mute spegne solo l'ascolto in cuffia.</p>
   </section>
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.9.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.0.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -504,6 +561,27 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 </div>
 
+<!-- Montaggio -->
+<div class="modal edm" id="edModal" hidden>
+  <div class="ed" role="dialog" aria-labelledby="edTitle">
+    <div class="ed-top">
+      <h3 id="edTitle">🎬 MONTAGGIO</h3><span class="ed-name" id="edName"></span>
+      <div class="lcd"><span id="edTime">00:00:00.0</span><small id="edLen"></small></div>
+      <button id="edPlay" class="ed-play" aria-label="Riproduci">▶</button>
+      <button id="edUndo" title="Annulla (Ctrl+Z)">↶</button><button id="edRedo" title="Ripristina (Ctrl+Shift+Z)">↷</button>
+      <button id="edZoomOut" title="Riduci (−)">−</button><button id="edZoomIn" title="Ingrandisci (+)">＋</button><button id="edFit">Adatta</button>
+      <span class="sp"></span><button id="edClose" class="go">FATTO</button>
+    </div>
+    <div class="ed-body">
+      <div class="ed-tl"><canvas id="edCanvas"></canvas><input type="range" id="edScroll" min="0" max="0" step="0.01" value="0" aria-label="Scorri la timeline"></div>
+      <div class="ed-side" id="edVidHost" hidden></div>
+    </div>
+    <div class="ed-insp" id="edInsp"></div>
+    <p class="note" id="edMsg" style="margin:0"></p>
+    <p class="note" style="margin:0">Tasti: Spazio play · S dividi · Canc taglia/elimina · M silenzia · C capitolo · ← → sposta il cursore · Ctrl+Z annulla · Esc chiudi.</p>
+  </div>
+</div>
+
 <!-- Sessioni -->
 <div class="modal" id="sessModal" hidden>
   <div class="sheet" role="dialog" aria-labelledby="sessTitle">
@@ -545,6 +623,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
           <label for="ytIntro">Primo capitolo (a 00:00)</label><input id="ytIntro" value="Introduzione" style="background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%">
         </div></section>
     </div>
+    <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (barre orizzontali, comodo su tablet)</option></select></div>
     <h3 style="font-size:13px">DISPOSIZIONE DEI PANNELLI</h3>
     <p class="note" style="margin:0">Scegli un set pronto o creane uno tuo: ordine (▲▼), larghezza e visibilità di ogni pannello. Metti il teleprompter dove guardi, cioè sotto la webcam.</p>
     <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layDel" class="danger">Elimina set</button></div>
