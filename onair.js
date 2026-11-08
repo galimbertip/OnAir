@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '2.8.0' };
+const APP = { name: 'GPverse OnAir', version: '2.9.0' };
 
 const CHANGELOG = [
+  { v: '2.9.0', date: '08/11/2026', title: 'Backup e trasferimento tra dispositivi', items: [
+    'Impostazioni → Backup e trasferimento: salvi tutto lo studio (audio di sigla, sottofondi e capitoli, testo, logo, sfondo, mixer, disposizioni, tasti, piattaforme) in un file .onair e lo carichi su un altro dispositivo.',
+    'Sessioni: «⬇ Trasferisci» salva una registrazione completa (voce, video, musica usata, mix e capitoli) in un file .onair; «⬆ Importa sessione» la apre su un altro dispositivo, pronta da rimixare ed esportare.',
+    'Microfono, uscita audio e webcam scelti restano quelli del dispositivo su cui carichi lo studio.'
+  ]},
   { v: '2.8.0', date: '08/11/2026', title: 'Spotify, YouTube e capitoli', items: [
     'Impostazioni → Canale e piattaforme: impostazioni separate per Spotify (formato, volume) e YouTube (volume, qualità audio, capitoli).',
     'Sessioni: pulsanti «Esporta per Spotify» ed «Esporta per YouTube» che usano quelle impostazioni; resta l\'esportazione personalizzata.',
@@ -92,7 +97,7 @@ const CHANGELOG = [
   ]}
 ];
 const ROADMAP = [
-  'Idee per il futuro: trasferire le sessioni tra PC e tablet, voce del teleprompter che segue la lettura'
+  'Idee per il futuro: teleprompter che segue la voce, grafica in stile mixer professionale'
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -1637,7 +1642,7 @@ async function openSessions(selId) {
     const el = document.createElement('li'); if (s.id === selId) el.classList.add('sel');
     const dur = s.len / s.sr;
     const missing = [...new Set(s.segs.map(g => g.fileId))].filter(id => !S.names.has(id));
-    el.innerHTML = `<div class="row"><input aria-label="Nome sessione" style="flex:1;min-width:0"><button class="go-mix main-act">Ascolta, mixa ed esporta</button><button class="del danger">Elimina</button></div>
+    el.innerHTML = `<div class="row"><input aria-label="Nome sessione" style="flex:1;min-width:0"><button class="go-mix main-act">Ascolta, mixa ed esporta</button><button class="xfer" title="Salva la sessione in un file .onair per aprirla su un altro dispositivo">⬇ Trasferisci</button><button class="del danger">Elimina</button></div>
       <div class="meta"><span>${new Date(s.created).toLocaleString('it-IT')}</span><span>${fmt(dur, false)}</span><span>re-take: ${s.retakes}</span><span>${s.video && s.video.nGroups ? 'audio + video ' + s.video.h + 'p' : 'solo audio'}</span><span>${s.status === 'done' ? 'completa' : 'interrotta (recuperata)'}</span></div>
       ${missing.length ? `<span class="note">Attenzione: ${missing.length} file musicali non sono più nella libreria e mancheranno nel mix.</span>` : ''}
       <div class="exp" hidden></div>`;
@@ -1650,6 +1655,7 @@ async function openSessions(selId) {
       await DB.delRange('chunks', ckey(s.id, 0), ckey(s.id, 9999999)); await DB.delRange('chunks', s.id + ':v:', s.id + ':v:~'); await DB.del('sessions', s.id); el.remove(); toast('Sessione eliminata');
     });
     el.querySelector('.go-mix').addEventListener('click', () => openExport(el, s));
+    el.querySelector('.xfer').addEventListener('click', (ev) => exportSessionFile(s, ev.currentTarget));
     list.append(el);
     if (s.id === selId) openExport(el, s);
   }
@@ -1742,6 +1748,94 @@ function openExport(el, s) {
   box.querySelector('.ex-sp').addEventListener('click', () => { const sp = S.settings.plat.sp; runExport({ format: typeof lamejs === 'undefined' ? 'wav' : sp.fmt, target: tgt(sp.lufs), tag: 'Spotify' }); });
   box.querySelector('.ex-yt').addEventListener('click', () => { const yt = S.settings.plat.yt; runExport({ format: 'webm', target: tgt(yt.lufs), abr: +yt.abr, tag: 'YouTube' }); });
   box.querySelector('.run').addEventListener('click', () => runExport({ format: box.querySelector('.fmt').value, target: tgt(box.querySelector('.norm').value), abr: +S.settings.plat.yt.abr }));
+}
+
+/* ------------------------------------------------------------------ File .onair (backup e trasferimento)
+ * Formato: "ONAIR1\n" + lunghezza intestazione (4 byte) + intestazione JSON + dati binari in fila. */
+const PACK = {
+  async build(kind, items, label) {
+    const head = { kind, app: APP.version, created: Date.now(), label, entries: [] }; const parts = [];
+    for (const it of items) {
+      const v = it.value; const e = { store: it.store, key: it.key };
+      if (it.store === 'files') { e.t = 'file'; e.meta = { name: v.name, type: v.type }; e.len = v.blob.size; parts.push(v.blob); }
+      else if (v instanceof Int16Array) { e.t = 'i16'; e.len = v.byteLength; parts.push(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)); }
+      else if (v && Array.isArray(v.ch) && v.ch.length && v.ch[0].d) { e.t = 'vgroup'; e.meta = { idx: v.idx, t0: v.t0, t1: v.t1, ch: v.ch.map(c => ({ ts: c.ts, key: c.key, n: c.d.byteLength })) }; e.len = v.ch.reduce((a, c) => a + c.d.byteLength, 0); for (const c of v.ch) parts.push(c.d); }
+      else { e.t = 'json'; const b = new TextEncoder().encode(JSON.stringify(v)); e.len = b.byteLength; parts.push(b); }
+      head.entries.push(e);
+    }
+    const hb = new TextEncoder().encode(JSON.stringify(head)), lb = new Uint8Array(4); new DataView(lb.buffer).setUint32(0, hb.byteLength, true);
+    return new Blob([new TextEncoder().encode('ONAIR1\n'), lb, hb, ...parts], { type: 'application/octet-stream' });
+  },
+  async read(file, onProg) {
+    const magic = new TextDecoder().decode(await file.slice(0, 7).arrayBuffer());
+    if (magic !== 'ONAIR1\n') throw new Error('non è un file di OnAir');
+    const hl = new DataView(await file.slice(7, 11).arrayBuffer()).getUint32(0, true);
+    const head = JSON.parse(new TextDecoder().decode(await file.slice(11, 11 + hl).arrayBuffer()));
+    let pos = 11 + hl; const out = [];
+    for (let i = 0; i < head.entries.length; i++) {
+      const e = head.entries[i], sl = file.slice(pos, pos + e.len); pos += e.len; let value;
+      if (e.t === 'file') value = { name: e.meta.name, type: e.meta.type, blob: new Blob([await sl.arrayBuffer()], { type: e.meta.type }) };
+      else if (e.t === 'i16') value = new Int16Array(await sl.arrayBuffer());
+      else if (e.t === 'vgroup') { const ab = await sl.arrayBuffer(); let o = 0; value = { idx: e.meta.idx, t0: e.meta.t0, t1: e.meta.t1, ch: e.meta.ch.map(c => { const d = ab.slice(o, o + c.n); o += c.n; return { ts: c.ts, key: c.key, d }; }) }; }
+      else value = JSON.parse(new TextDecoder().decode(await sl.arrayBuffer()));
+      out.push({ store: e.store, key: e.key, value });
+      if (onProg && i % 20 === 0) onProg(i / head.entries.length);
+    }
+    return { head, items: out };
+  },
+  save(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name.replace(/[\\/:*?"<>|]+/g, '-'); document.body.append(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+  }
+};
+const LOCAL_KEYS = ['micId', 'outId', 'camId'];
+async function exportStudio() {
+  const msg = $('bkMsg'); msg.textContent = 'Preparo il file…';
+  const items = [];
+  for (const k of ['deck', 'settings', 'prompter']) { const v = await DB.get('state', k); if (v) items.push({ store: 'state', key: k, value: v }); }
+  const ids = new Set([S.deck.intro, ...S.deck.bg, ...S.deck.caps, 'ov-bg', 'ov-logo'].filter(Boolean));
+  for (const id of ids) { const f = await DB.get('files', id); if (f) items.push({ store: 'files', key: id, value: f }); }
+  const blob = await PACK.build('studio', items, 'Studio');
+  const d = new Date(); PACK.save(blob, `OnAir studio ${d.toLocaleDateString('it-IT').replace(/\//g, '-')}.onair`);
+  msg.textContent = `File pronto (${(blob.size / 1048576).toFixed(1)} MB): lo trovi nei download.`;
+}
+async function importStudio(file) {
+  const msg = $('bkMsg');
+  try {
+    const { head, items } = await PACK.read(file, (p) => { msg.textContent = `Leggo il file… ${Math.round(p * 100)}%`; });
+    if (head.kind !== 'studio') throw new Error(head.kind === 'session' ? 'questo file è una sessione: aprilo da Sessioni → Importa sessione' : 'tipo di file sconosciuto');
+    if (isRec() || blocked()) throw new Error('ferma prima la registrazione');
+    for (const it of items) {
+      if (it.store === 'state' && it.key === 'settings') { for (const k of LOCAL_KEYS) it.value[k] = S.settings[k]; }
+      await DB.put(it.store, it.key, it.value);
+    }
+    msg.textContent = 'Studio caricato: riavvio OnAir…'; toast('Studio caricato: riavvio OnAir');
+    setTimeout(() => location.reload(), 1200);
+  } catch (e) { console.error(e); msg.textContent = 'Non riesco a caricare lo studio: ' + e.message; }
+}
+async function exportSessionFile(s, btn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Preparo…';
+  try {
+    const items = [{ store: 'sessions', key: s.id, value: s }];
+    const nA = Math.ceil(s.len / s.sr) + 1;
+    for (let i = 0; i <= nA; i++) { const c = await DB.get('chunks', ckey(s.id, i)); if (c) items.push({ store: 'chunks', key: ckey(s.id, i), value: c }); }
+    if (s.video) for (let i = 0; i < (s.video.nGroups || 0); i++) { const g = await DB.get('chunks', vkey(s.id, i)); if (g) items.push({ store: 'chunks', key: vkey(s.id, i), value: g }); }
+    for (const id of new Set(s.segs.map(g => g.fileId))) { const f = await DB.get('files', id); if (f) items.push({ store: 'files', key: id, value: f }); }
+    const blob = await PACK.build('session', items, s.name);
+    PACK.save(blob, (s.name || 'sessione') + '.onair');
+    toast(`Sessione salvata (${(blob.size / 1048576).toFixed(1)} MB): la trovi nei download`);
+  } catch (e) { console.error(e); toast('Non riesco a salvare la sessione: ' + e.message); }
+  btn.disabled = false; btn.textContent = old;
+}
+async function importSessionFile(file) {
+  try {
+    toast('Leggo la sessione…');
+    const { head, items } = await PACK.read(file);
+    if (head.kind !== 'session') throw new Error(head.kind === 'studio' ? 'questo file è uno studio: caricalo da Impostazioni → Backup e trasferimento' : 'tipo di file sconosciuto');
+    let sid = null;
+    for (const it of items) { if (it.store === 'files' && await DB.get('files', it.key)) continue; await DB.put(it.store, it.key, it.value); if (it.store === 'sessions') sid = it.key; if (it.store === 'files') S.names.set(it.key, it.value.name); }
+    toast('Sessione importata: «' + head.label + '»'); openSessions(sid);
+  } catch (e) { console.error(e); toast('Non riesco a importare: ' + e.message); }
 }
 
 /* Capitoli YouTube */
@@ -2050,6 +2144,17 @@ function wire() {
   $('ovLogoSize').addEventListener('input', (e) => { ov.logoSize = +e.target.value; saveSettings(); syncOv(); });
   $('ovLogoOp').addEventListener('input', (e) => { ov.logoOp = +e.target.value; saveSettings(); syncOv(); });
   $('ovSub').addEventListener('click', () => SUB.start());
+  // Backup e trasferimento
+  let onairMode = 'studio';
+  $('bkSave').addEventListener('click', () => exportStudio());
+  $('bkLoad').addEventListener('click', () => { onairMode = 'studio'; $('fileOnair').click(); });
+  $('sessImport').addEventListener('click', () => { onairMode = 'session'; $('fileOnair').click(); });
+  $('fileOnair').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    let kind = onairMode; // il file dice da solo se è uno studio o una sessione
+    try { const hl = new DataView(await f.slice(7, 11).arrayBuffer()).getUint32(0, true); kind = JSON.parse(new TextDecoder().decode(await f.slice(11, 11 + hl).arrayBuffer())).kind; } catch (err) {}
+    if (kind === 'session') { if ($('sessModal').hidden) openSessions(); importSessionFile(f); } else { if ($('setModal').hidden) openSettings(); importStudio(f); }
+  });
   // Canale e piattaforme
   const pl = S.settings.plat;
   $('setChan').value = S.settings.channel || ''; $('setChan').addEventListener('input', (e) => { S.settings.channel = e.target.value; saveSettings(); });

@@ -294,7 +294,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V2.8.0</span>
+    <span class="ver" id="bootVer">V2.9.0</span>
   </div>
 </div>
 
@@ -302,7 +302,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V2.8.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V2.9.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -440,7 +440,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.8.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.9.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -507,7 +507,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
 <!-- Sessioni -->
 <div class="modal" id="sessModal" hidden>
   <div class="sheet" role="dialog" aria-labelledby="sessTitle">
-    <h3 id="sessTitle">SESSIONI <span class="sp"></span><button class="x" data-close="sessModal">Chiudi</button></h3>
+    <h3 id="sessTitle">SESSIONI <span class="sp"></span><button id="sessImport" title="Apri una sessione salvata da un altro dispositivo (file .onair)">⬆ Importa sessione</button><button class="x" data-close="sessModal">Chiudi</button></h3>
     <p class="note">Ogni registrazione resta salvata in questo browser: puoi rifare il mix e riesportarla quando vuoi.</p>
     <ul class="sess" id="sessList"></ul>
   </div>
@@ -523,6 +523,9 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <label for="setPre">Pre-ascolto prima di ripartire (s)</label><input type="number" id="setPre" min="0" max="10" step="0.5">
       <label for="setNs">Riduzione rumore del browser</label><select id="setNs"><option value="0">Spenta (consigliato a casa)</option><option value="1">Accesa (utile in viaggio)</option></select>
     </div>
+    <h3 style="font-size:13px">BACKUP E TRASFERIMENTO</h3>
+    <p class="note" style="margin:0">Lo «studio» è tutto il resto tranne le registrazioni: sigla, sottofondi, capitoli, testo del teleprompter, logo, sfondo, mixer, disposizioni, tasti e piattaforme. Salvalo in un file .onair e aprilo su un altro dispositivo (PC, tablet). Microfono e webcam scelti restano quelli del dispositivo. Le singole registrazioni si trasferiscono da Sessioni.</p>
+    <div class="row"><button id="bkSave" class="main-act">⬇ Salva lo studio in un file</button><button id="bkLoad">⬆ Carica uno studio</button><span class="note" id="bkMsg"></span></div>
     <h3 style="font-size:13px">CANALE E PIATTAFORME</h3>
     <div class="form">
       <label for="setChan">Nome del canale (per «Iscriviti»)</label><input id="setChan" placeholder="Es. GPverse" style="background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%">
@@ -564,6 +567,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
 
 <input type="file" id="fileOvBg" accept="image/*" hidden>
 <input type="file" id="fileOvLogo" accept="image/png,image/*" hidden>
+<input type="file" id="fileOnair" accept=".onair,application/octet-stream" hidden>
 <input type="file" id="fileScript" accept=".txt,.md,text/plain" hidden>
 <input type="file" id="fileIntro" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" hidden>
 <input type="file" id="fileBg" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple hidden>

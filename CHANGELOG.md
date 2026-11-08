@@ -7,6 +7,12 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V2.9.0 — 08/11/2026
+**Backup e trasferimento tra dispositivi**
+- Impostazioni → Backup e trasferimento: «⬇ Salva lo studio in un file» (sigla, sottofondi, capitoli, testo, logo, sfondo, mixer, disposizioni, tasti, piattaforme) e «⬆ Carica uno studio» su un altro dispositivo. Microfono, uscita e webcam restano quelli del dispositivo.
+- Sessioni: «⬇ Trasferisci» salva una registrazione completa (voce, video, musica usata, mix, capitoli) in un file .onair; «⬆ Importa sessione» la apre altrove, pronta da rimixare ed esportare.
+- OnAir riconosce da solo se un file .onair è uno studio o una sessione.
+
 ## V2.8.0 — 08/11/2026
 **Spotify, YouTube e capitoli**
 - Impostazioni → Canale e piattaforme: nome del canale; per Spotify formato e volume (−16 LUFS di base); per YouTube volume (−14 LUFS di base), qualità audio e capitoli.
@@ -109,4 +115,4 @@ Nasce **OnAir**, web app GPverse che sostituisce Python + OBS + Audacity per l'a
 PG_PodcastDeck originale (Python + PyQt5 + pygame, comandava OBS via WebSocket). Resta nella cartella superiore com'era.
 
 ## In arrivo
-- Idee: trasferire le sessioni tra PC e tablet; teleprompter che segue la voce
+- Idee: teleprompter che segue la voce; nuova grafica in stile mixer professionale

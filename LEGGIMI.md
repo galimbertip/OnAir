@@ -1,4 +1,4 @@
-# GPverse OnAir V2.8.0 — Come si usa
+# GPverse OnAir V2.9.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -39,6 +39,9 @@ Questi sono i tasti predefiniti: puoi cambiarli in **Impostazioni → Scorciatoi
 
 ## Teleprompter
 Premi **✎ Modifica testo** (o carica un .txt). Nel testo puoi mettere i segnali [SIGLA], [SOTTOFONDO], [STOP SOTTOFONDO], [CAPITOLO], [CAPITOLO 2], [STOP CAPITOLO], [PAUSA]: quando arrivano sulla riga gialla durante la registrazione, OnAir li esegue.
+
+## Da un dispositivo all'altro
+Ogni dispositivo (PC, tablet) ha la sua memoria. Per portare lo studio: Impostazioni → «⬇ Salva lo studio in un file», poi sull'altro dispositivo «⬆ Carica uno studio». Per una registrazione: Sessioni → «⬇ Trasferisci», poi sull'altro «⬆ Importa sessione». Il file .onair si passa come preferisci (Drive, chiavetta, Telegram…).
 
 ## Disposizione
 In Impostazioni → Disposizione dei pannelli scegli «Teleprompter davanti» per avere il testo in alto, sotto la webcam, o crea un tuo set.
