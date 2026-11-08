@@ -1,4 +1,4 @@
-# GPverse OnAir V2.5.0 — Come si usa
+# GPverse OnAir V2.8.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -31,15 +31,20 @@ Questi sono i tasti predefiniti: puoi cambiarli in **Impostazioni → Scorciatoi
 | Invio | Prossimo capitolo |
 | 1–9 | Capitolo diretto |
 | P | Teleprompter: avvia / ferma lo scorrimento |
-| ↑ ↓ | Teleprompter: velocità |
+| ↑ ↓ | Teleprompter: sposta il testo |
+| Shift+↑ / Shift+↓ | Teleprompter: velocità |
+| I | Animazione «Iscriviti» |
 | T | Mostra / nascondi il teleprompter |
 | V | Video sì / no |
 
 ## Teleprompter
 Premi **✎ Modifica testo** (o carica un .txt). Nel testo puoi mettere i segnali [SIGLA], [SOTTOFONDO], [STOP SOTTOFONDO], [CAPITOLO], [CAPITOLO 2], [STOP CAPITOLO], [PAUSA]: quando arrivano sulla riga gialla durante la registrazione, OnAir li esegue.
 
+## Disposizione
+In Impostazioni → Disposizione dei pannelli scegli «Teleprompter davanti» per avere il testo in alto, sotto la webcam, o crea un tuo set.
+
 ## Dopo la registrazione
-Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apre **Sessioni**: premi ▶ per l'anteprima, ritocchi livelli ed EQ mentre ascolti, scegli MP3 o WAV e premi **ESPORTA**. Il file è già pronto per Spotify.
+Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apre **Sessioni**: premi ▶ per l'anteprima, ritocchi livelli ed EQ mentre ascolti, scegli MP3 o WAV e premi **ESPORTA**. Poi premi **🎧 Esporta per Spotify** o **▶ Esporta per YouTube** (impostazioni in Impostazioni → Canale e piattaforme). Per YouTube controlla i capitoli e copiali nella descrizione con 📋.
 
 ## Video per YouTube
 **Inquadratura con green screen:** nel riquadro VIDEO premi «🎯 Scegli il verde» e clicca sul telo, poi «Green screen». Se si vede qualcosa oltre il telo, premi «✂ Scegli area» e trascina un rettangolo attorno a te e al telo: il resto diventa nero. Con «Ingrandisci area» l'area riempie lo schermo.

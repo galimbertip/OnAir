@@ -7,6 +7,24 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V2.8.0 — 08/11/2026
+**Spotify, YouTube e capitoli**
+- Impostazioni → Canale e piattaforme: nome del canale; per Spotify formato e volume (−16 LUFS di base); per YouTube volume (−14 LUFS di base), qualità audio e capitoli.
+- Sessioni: «🎧 Esporta per Spotify» e «▶ Esporta per YouTube» usano quelle impostazioni; l'esportazione personalizzata resta disponibile.
+- Capitoli YouTube creati dagli stacchetti (titolo dal nome del file o «Capitolo n»; il primo è sempre a 00:00), modificabili: orario, titolo, aggiungi, aggiungi nel punto dell'anteprima, elimina, rigenera. Controllo delle regole di YouTube (almeno 3, il primo a 00:00, ognuno di almeno 10 secondi) e «📋 Copia per la descrizione».
+
+## V2.7.0 — 08/11/2026
+**Sfondo, logo e Iscriviti** (riquadro VIDEO → «Sfondo, logo e Iscriviti»)
+- Sfondo dove non arriva la webcam (fuori dall'area scelta): nero, sfocato come al TG (lo stesso video allargato e sfumato) o un'immagine. Si cambia quando vuoi.
+- Logo PNG in sovraimpressione, senza effetto: angolo, dimensione, opacità.
+- Animazione «Iscriviti» in alto al centro con il nome del canale, clic e campanella: tasto I, pulsante, o segnale [ISCRIVITI] nel teleprompter.
+- Tutto finisce nel video registrato.
+
+## V2.6.0 — 08/11/2026
+- Teleprompter: ↑ e ↓ spostano il testo (tenuti premuti scorrono), anche mentre va da solo; la velocità è passata a Shift+↑ / Shift+↓.
+- Disposizione dei pannelli in Impostazioni: set pronti (Classico, Teleprompter davanti, Solo lettura) e set personali con ordine, larghezza, visibilità e teleprompter più alto.
+- Green screen di qualsiasi colore, anche muro bianco o grigio: con i colori neutri OnAir considera anche la luminosità.
+
 ## V2.5.0 — 08/11/2026
 **Inquadratura e green screen (riquadro VIDEO)**
 - «✂ Scegli area»: trascini sull'anteprima il rettangolo da tenere; fuori diventa nero. Serve a nascondere quello che si vede oltre il telo. «Tutta l'inquadratura» lo toglie.

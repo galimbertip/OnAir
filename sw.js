@@ -1,6 +1,6 @@
 /* GPverse OnAir — service worker: funziona anche senza internet.
  * Strategia: prima la rete (così gli aggiornamenti arrivano subito), se manca la rete si usa la copia salvata. */
-const CACHE = 'onair-v2.5.0';
+const CACHE = 'onair-v2.8.0';
 const SHELL = ['./', './index.html', './onair.js', './lib/lame.min.js', './lib/webm-muxer.js', './manifest.webmanifest',
   './assets/logo.jpg', './assets/icon.png', './assets/icon-192.png', './assets/icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });

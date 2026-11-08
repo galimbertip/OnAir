@@ -252,7 +252,26 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
 .dev .why{font-size:13px;color:var(--warn)}
 .pill.click{cursor:pointer}
 
-@media (max-width:980px){.stage{grid-template-columns:1fr}}
+.panels{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.pnl{flex:0 0 auto;width:100%;min-width:0}
+.pnl[data-w="2/3"]{width:calc(66.666% - 4.67px)}
+.pnl[data-w="1/2"]{width:calc(50% - 7px)}
+.pnl[data-w="1/3"]{width:calc(33.333% - 9.34px)}
+.prompter[data-tall="1"] .pt-view,.prompter[data-tall="1"] .pt-edit textarea{height:clamp(300px,58vh,780px)}
+@media (max-width:760px){.pnl[data-w]{width:100%}}
+.plat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.plat section{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--panel2);display:flex;flex-direction:column;gap:8px;min-width:0}
+.plat h4{margin:0;font:700 12px var(--f-display);letter-spacing:.16em;color:var(--violet)}
+@media (max-width:640px){.plat{grid-template-columns:1fr}}
+.chap{display:grid;grid-template-columns:5.5em minmax(0,1fr) auto;gap:6px;align-items:center}
+.chap input{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:6px 8px;width:100%;font-family:inherit}
+.chap input.t{font-family:var(--f-mono)}
+.chap .bad{border-color:var(--rec)}
+.exb{display:flex;gap:10px;flex-wrap:wrap}
+.exb button{flex:1 1 200px;min-height:52px;font:700 14px var(--f-display);letter-spacing:.06em}
+.laylist{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:6px 10px;align-items:center}
+.laylist select{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:5px 8px}
+.laylist button{padding:3px 9px}
 @media (max-width:980px){.deck{grid-template-columns:1fr 1fr}.deck .card:first-child{grid-column:1/-1}.strips{grid-template-columns:1fr 1fr}}
 @media (max-width:640px){
   .deck{grid-template-columns:1fr}
@@ -275,7 +294,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V2.5.0</span>
+    <span class="ver" id="bootVer">V2.8.0</span>
   </div>
 </div>
 
@@ -283,7 +302,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V2.5.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V2.8.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -295,7 +314,8 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <button id="setBtn">Impostazioni</button>
   </header>
 
-  <section class="transport">
+  <div class="panels" id="panels">
+  <section class="transport pnl" data-panel="transport">
     <div class="tc"><span id="tc">00:00:00.0</span><small id="tcSub">Nessuna registrazione in corso</small></div>
     <div class="tbtns">
       <button id="recBtn">● REGISTRA<span class="kbd">Spazio</span></button>
@@ -304,8 +324,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     </div>
   </section>
 
-  <div class="stage" id="stage">
-  <section class="prompter" id="prompter">
+  <section class="prompter pnl" id="prompter" data-panel="prompter">
     <div class="pt-bar">
       <h2>TELEPROMPTER</h2>
       <button id="ptRun" title="Avvia o ferma lo scorrimento">⏯ Scorri<span class="kbd" data-act="tpRun">P</span></button>
@@ -325,16 +344,16 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     </div>
     <div class="pt-edit" id="ptEditBox" hidden>
       <div class="row"><span class="note">Inserisci un segnale nel punto del cursore:</span>
-        <button data-ins="[SIGLA]">[SIGLA]</button><button data-ins="[SOTTOFONDO]">[SOTTOFONDO]</button><button data-ins="[STOP SOTTOFONDO]">[STOP SOTTOFONDO]</button><button data-ins="[CAPITOLO]">[CAPITOLO]</button><button data-ins="[CAPITOLO 2]">[CAPITOLO n]</button><button data-ins="[PAUSA]">[PAUSA]</button></div>
+        <button data-ins="[SIGLA]">[SIGLA]</button><button data-ins="[SOTTOFONDO]">[SOTTOFONDO]</button><button data-ins="[STOP SOTTOFONDO]">[STOP SOTTOFONDO]</button><button data-ins="[CAPITOLO]">[CAPITOLO]</button><button data-ins="[CAPITOLO 2]">[CAPITOLO n]</button><button data-ins="[PAUSA]">[PAUSA]</button><button data-ins="[ISCRIVITI]">[ISCRIVITI]</button></div>
       <textarea id="ptArea" aria-label="Testo del teleprompter" placeholder="Scrivi o incolla qui il testo della puntata…"></textarea>
       <div class="row"><button id="ptSave" class="main-act">Salva e torna alla lettura</button><button id="ptCancel">Annulla</button></div>
-      <p class="note">[SIGLA] fa partire la sigla · [SOTTOFONDO] avvia il sottofondo · [STOP SOTTOFONDO] lo mette in pausa · [CAPITOLO] lancia il prossimo capitolo · [CAPITOLO 2] lancia il capitolo 2 · [STOP CAPITOLO] lo ferma · [PAUSA] ferma lo scorrimento del testo.</p>
+      <p class="note">[SIGLA] fa partire la sigla · [SOTTOFONDO] avvia il sottofondo · [STOP SOTTOFONDO] lo mette in pausa · [CAPITOLO] lancia il prossimo capitolo · [CAPITOLO 2] lancia il capitolo 2 · [STOP CAPITOLO] lo ferma · [PAUSA] ferma lo scorrimento del testo · [ISCRIVITI] lancia l'animazione «Iscriviti».</p>
     </div>
   </section>
 
-  <section class="vcard" id="vcard">
+  <section class="vcard pnl" id="vcard" data-panel="video">
     <h2>VIDEO <span class="sp"></span><button class="switch" id="vOn" aria-pressed="true" title="Registra anche il video">Registra video</button></h2>
-    <div class="vbox" id="vBox"><canvas id="vCanvas" width="1280" height="720"></canvas><div class="varea" id="vAreaBox" hidden></div><div class="vhint" id="vHint" hidden></div><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
+    <div class="vbox" id="vBox"><canvas id="vCanvas" width="1280" height="720" style="display:none"></canvas><canvas id="vOut" width="1280" height="720"></canvas><div class="varea" id="vAreaBox" hidden></div><div class="vhint" id="vHint" hidden></div><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
     <div class="knobs">
       <label for="vThr">Contorni</label><input type="range" id="vThr" min="0.02" max="0.6" step="0.01"><output id="vThrO"></output>
       <label for="vGl">Disturbo</label><input type="range" id="vGl" min="0" max="1" step="0.01"><output id="vGlO"></output>
@@ -351,21 +370,32 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <button class="switch" id="vZoom" aria-pressed="false" title="Allarga l'area scelta a tutto lo schermo">Ingrandisci area</button>
     </div>
     <div class="row">
-      <button class="switch" id="vKey" aria-pressed="false" title="Il telo verde diventa nero">Green screen</button>
-      <button id="vPick" title="Clicca sul telo verde nell'anteprima per prenderne il colore">🎯 Scegli il verde</button>
+      <button class="switch" id="vKey" aria-pressed="false" title="Il telo (verde, bianco o di altro colore) diventa nero">Green screen</button>
+      <button id="vPick" title="Clicca sul telo o sul muro dietro di te per prenderne il colore">🎯 Scegli il colore</button>
       <span class="kswatch" id="vKc" title="Colore del telo"></span>
     </div>
     <div class="knobs">
-      <label for="vTol">Tolleranza verde</label><input type="range" id="vTol" min="0.02" max="0.3" step="0.005"><output id="vTolO"></output>
+      <label for="vTol">Tolleranza</label><input type="range" id="vTol" min="0.02" max="0.3" step="0.005"><output id="vTolO"></output>
     </div>
+    <details class="eq" id="ovBox"><summary>Sfondo, logo e Iscriviti</summary>
+      <div class="knobs" style="grid-template-columns:auto minmax(0,1fr)">
+        <label for="ovBg">Sfondo dove non arriva la webcam</label><select id="ovBg"><option value="none">Nero</option><option value="blur">Sfocato, come al TG</option><option value="image">Immagine</option></select>
+        <span></span><div class="row"><button id="ovBgLoad">🖼 Carica immagine di sfondo</button><span class="note" id="ovBgName"></span></div>
+        <label for="ovLogoOn">Logo</label><div class="row"><button class="switch" id="ovLogoOn" aria-pressed="false">Mostra logo</button><button id="ovLogoLoad">🖼 Carica logo (PNG)</button></div>
+        <label for="ovLogoPos">Posizione</label><select id="ovLogoPos"><option value="tl">In alto a sinistra</option><option value="tr">In alto a destra</option><option value="bl">In basso a sinistra</option><option value="br">In basso a destra</option></select>
+      </div>
+      <div class="knobs">
+        <label for="ovLogoSize">Dimensione</label><input type="range" id="ovLogoSize" min="0.05" max="0.35" step="0.01"><output id="ovLogoSizeO"></output>
+        <label for="ovLogoOp">Opacità</label><input type="range" id="ovLogoOp" min="0.2" max="1" step="0.05"><output id="ovLogoOpO"></output>
+      </div>
+      <div class="row" style="margin-top:8px"><button id="ovSub">🔔 Lancia «Iscriviti»<span class="kbd" data-act="sub">I</span></button><span class="note">Nome del canale in Impostazioni. Anche con [ISCRIVITI] nel testo.</span></div>
+    </details>
     <div class="note" id="vFps" style="font-family:var(--f-mono)">—</div>
     <div class="note" id="vWarn" style="color:var(--warn)" hidden></div>
     <p class="note" style="margin:0">Il video si registra con l'effetto già applicato. Tieni OnAir in primo piano mentre registri: se la finestra è nascosta il browser rallenta il video.</p>
   </section>
-  </div>
 
-  <main class="deck">
-    <section class="card" id="cardIntro">
+    <section class="card pnl" id="cardIntro" data-panel="intro">
       <h2>SIGLA <span class="sp"></span><span class="kbd" data-act="intro">S</span></h2>
       <div class="fname" id="introName">Nessuna sigla caricata</div>
       <div class="prog"><i id="introProg"></i></div>
@@ -377,7 +407,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <p class="note">Durante la sigla il sottofondo resta spento: lo fai partire tu alla fine, con B.</p>
     </section>
 
-    <section class="card" id="cardBg">
+    <section class="card pnl" id="cardBg" data-panel="bg">
       <h2>SOTTOFONDO <span class="sp"></span><span class="tag" id="bgTag"></span><span class="kbd" data-act="bg">B</span></h2>
       <ul class="list" id="bgList"></ul>
       <div class="prog"><i id="bgProg"></i></div>
@@ -389,7 +419,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       </div>
     </section>
 
-    <section class="card" id="cardCap">
+    <section class="card pnl" id="cardCap" data-panel="cap">
       <h2>CAPITOLI <span class="sp"></span><span class="kbd" data-act="cap">Invio</span><span class="kbd">1–9</span></h2>
       <ul class="list" id="capList"></ul>
       <div class="prog"><i id="capProg"></i></div>
@@ -401,16 +431,16 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       </div>
       <p class="note">Mentre suona un capitolo il sottofondo si ferma, poi riparte da dove era rimasto.</p>
     </section>
-  </main>
 
-  <section class="mixer">
+  <section class="mixer pnl" data-panel="mixer">
     <h2>MIXER IN CUFFIA</h2>
     <div class="strips" id="liveStrips"></div>
     <p class="note">Questi livelli valgono per l'ascolto e sono il punto di partenza del mix finale. Dopo la registrazione li ritocchi in Sessioni, con l'anteprima, prima di esportare. ↺ riporta la fonte al suo livello predefinito, che imposti con ★ dentro «Gain ed EQ». Mute spegne solo l'ascolto in cuffia.</p>
   </section>
+  </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.5.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V2.8.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -493,6 +523,30 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <label for="setPre">Pre-ascolto prima di ripartire (s)</label><input type="number" id="setPre" min="0" max="10" step="0.5">
       <label for="setNs">Riduzione rumore del browser</label><select id="setNs"><option value="0">Spenta (consigliato a casa)</option><option value="1">Accesa (utile in viaggio)</option></select>
     </div>
+    <h3 style="font-size:13px">CANALE E PIATTAFORME</h3>
+    <div class="form">
+      <label for="setChan">Nome del canale (per «Iscriviti»)</label><input id="setChan" placeholder="Es. GPverse" style="background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%">
+    </div>
+    <div class="plat">
+      <section><h4>🎧 SPOTIFY</h4>
+        <div class="form">
+          <label for="spFmt">Formato</label><select id="spFmt"><option value="mp3-128">MP3 128 kbps</option><option value="mp3-192">MP3 192 kbps</option><option value="wav">WAV senza perdita</option></select>
+          <label for="spLufs">Volume</label><select id="spLufs"><option value="-16">−16 LUFS (standard podcast)</option><option value="-14">−14 LUFS (più forte)</option><option value="-19">−19 LUFS (mono)</option><option value="off">Lascia com'è</option></select>
+        </div></section>
+      <section><h4>▶ YOUTUBE</h4>
+        <div class="form">
+          <label for="ytLufs">Volume</label><select id="ytLufs"><option value="-14">−14 LUFS (standard YouTube)</option><option value="-16">−16 LUFS</option><option value="off">Lascia com'è</option></select>
+          <label for="ytAbr">Qualità audio</label><select id="ytAbr"><option value="128000">128 kbps</option><option value="160000">160 kbps</option><option value="192000">192 kbps</option></select>
+          <label for="ytCh">Capitoli</label><select id="ytCh"><option value="1">Crea dagli stacchetti</option><option value="0">Non creare</option></select>
+          <label for="ytChName">Nome dei capitoli</label><select id="ytChName"><option value="file">Nome del file dello stacchetto</option><option value="num">Capitolo 1, 2, 3…</option></select>
+          <label for="ytIntro">Primo capitolo (a 00:00)</label><input id="ytIntro" value="Introduzione" style="background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%">
+        </div></section>
+    </div>
+    <h3 style="font-size:13px">DISPOSIZIONE DEI PANNELLI</h3>
+    <p class="note" style="margin:0">Scegli un set pronto o creane uno tuo: ordine (▲▼), larghezza e visibilità di ogni pannello. Metti il teleprompter dove guardi, cioè sotto la webcam.</p>
+    <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layDel" class="danger">Elimina set</button></div>
+    <div class="laylist" id="layList"></div>
+    <div class="row"><input id="layName" placeholder="Nome del nuovo set" aria-label="Nome del nuovo set" style="flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px"><button id="laySave" class="main-act">Salva come set personale</button></div>
     <h3 style="font-size:13px">SCORCIATOIE DA TASTIERA</h3>
     <p class="note" style="margin:0">Clicca il tasto accanto a un'azione e premi quello nuovo. Se è già usato, i due tasti si scambiano. I tasti 1–9 restano ai capitoli.</p>
     <div class="keylist" id="keyList"></div>
@@ -508,6 +562,8 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 </div>
 
+<input type="file" id="fileOvBg" accept="image/*" hidden>
+<input type="file" id="fileOvLogo" accept="image/png,image/*" hidden>
 <input type="file" id="fileScript" accept=".txt,.md,text/plain" hidden>
 <input type="file" id="fileIntro" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" hidden>
 <input type="file" id="fileBg" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple hidden>
