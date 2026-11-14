@@ -1,4 +1,4 @@
-# GPverse OnAir V3.6.1 — Come si usa
+# GPverse OnAir V3.7.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -58,6 +58,8 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 **Togliere lo sfondo senza telo — modalità «Persone» (consigliata):** in «⚙ Regola» scegli «Persone» in «Togli lo sfondo senza telo». OnAir riconosce te e gli ospiti e toglie tutto il resto, senza registrare niente; funziona anche se la luce cambia o urti la webcam. Serve l'accelerazione grafica attiva nel browser.
 
 **Green screen virtuale con la scena vuota (anche oggetti):** nel riquadro VIDEO premi «🎬 Registra la scena vuota» ed esci dall'inquadratura entro 5 secondi (porta via anche la sedia, se vuoi che sparisca). Quando rientri si vede solo ciò che è nuovo: tu, un ospite, un oggetto. Premi «👁 Vedi cosa resta» (bianco = resta, rosso = tolto) e regola «Pulizia»: alzala se resta qualcosa della stanza, abbassala se sparisce un pezzo di te. OnAir compensa da solo i cambi automatici di luce della webcam. Funziona meglio con luce costante, webcam ferma e vestiti di colore diverso dal muro. In «Sfondo, logo e Iscriviti» scegli cosa mettere al posto della stanza (nero, sfocato, immagine o video) e lascia spuntato «Anche dietro di te».
+
+**Rumore di tastiera e di fondo:** Impostazioni → Pulizia della voce. Accendi «Riduzione rumore AI» e «Noise gate», poi premi «🎙 Prova», parla e scrivi per 6 secondi, e riascolta originale e pulita. Alza la «Soglia del gate» finché, mentre scrivi senza parlare, la spia GATE resta grigia (e diventa verde quando parli). La pulizia si applica mentre registri.
 
 **Vista orizzontale:** su un monitor 16:9 OnAir dispone tutto affiancato, senza scorrere, sia in registrazione sia nel montaggio. In Impostazioni → Vista scegli automatica, orizzontale o verticale e dove mettere il video. In orizzontale i comandi video si aprono con «⚙ Regola» e il mixer è «a barre»: il ⚙ di ogni riga apre gain, EQ e (sulla voce) ingresso del microfono. In Impostazioni → Disposizione, con lo schermo in orizzontale, scegli per ogni pannello la colonna (sinistra, centro, destra o in basso), l'ordine e la larghezza delle colonne; ogni set ricorda separatamente la disposizione orizzontale e quella verticale.
 

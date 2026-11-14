@@ -7,6 +7,15 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.7.0 — 14/11/2026
+**Pulizia della voce** (Impostazioni → Pulizia della voce)
+- Riduzione rumore AI con RNNoise (lib/ns, @sapphi-red/web-noise-suppressor, MIT; RNNoise BSD).
+- Noise gate con comando filtrato sulla banda della voce, anticipo di 25 ms (non taglia l'inizio delle parole), tenuta 250 ms, attenuazione −30 dB; soglia regolabile riferita al livello dopo «Ingresso mic». Spia «GATE» sulla riga della voce.
+- «🎙 Prova»: 6 secondi registrati prima e dopo la pulizia, da riascoltare a confronto.
+- Misura su voce + tasti sintetici: AI + gate tolgono 21–30 dB ai tasti, voce invariata.
+- Audio dello studio sempre a 48 kHz.
+- Verificate in vista orizzontale con mixer a barre tutte le voci di Impostazioni (42 controlli automatici).
+
 ## V3.6.1 — 14/11/2026
 - Disposizione: ogni modifica si salva subito, in qualsiasi ordine; partendo da un set pronto si crea una copia personale. «Duplica con un nuovo nome»; tolto «Salva modifiche».
 - «Togli lo sfondo senza telo» in cima a «⚙ Regola».

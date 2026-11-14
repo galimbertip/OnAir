@@ -3,9 +3,16 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.6.1' };
+const APP = { name: 'GPverse OnAir', version: '3.7.0' };
 
 const CHANGELOG = [
+  { v: '3.7.0', date: '14/11/2026', title: 'Pulizia della voce: riduzione rumore AI e noise gate', items: [
+    'Riduzione rumore AI (RNNoise, gira nel browser): toglie tastiera, clic del mouse, ventole e rumori di fondo dalla voce registrata.',
+    'Noise gate: quando non parli abbassa il microfono, così nelle pause non entra niente. Soglia regolabile e spia «GATE» sulla riga della voce (verde = microfono aperto).',
+    '«🎙 Prova»: registra 6 secondi e li fa riascoltare originali e puliti, per scegliere le impostazioni giuste.',
+    'L\'audio dello studio ora lavora sempre a 48 kHz (come i video).',
+    'Verificate tutte le voci di Impostazioni in vista orizzontale con il mixer a barre.'
+  ] },
   { v: '3.6.1', date: '14/11/2026', title: 'Disposizione: modifiche salvate subito', items: [
     'Ogni modifica alla disposizione (colonna, ordine, visibilità, larghezza) si salva subito, in qualsiasi ordine la fai. Se parti da un set pronto, OnAir crea da solo una tua copia (es. «Classico (mio)»).',
     '«Duplica con un nuovo nome» al posto di «Salva come set personale»; tolto «Salva modifiche», non serve più.',
@@ -254,7 +261,7 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.15, vmode: 'scene' } },
+  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, nsAi: false, gate: false, gateThr: -35, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.15, vmode: 'scene' } },
   names: new Map()
 };
 async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); SYNC.changed(); }
@@ -286,7 +293,8 @@ registerProcessor('onair-rec', OnAirRec);`;
 
 async function initAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
-  E.ctx = new AC({ latencyHint: 'interactive' });
+  // 48 kHz fisso: è la frequenza della riduzione rumore AI e dell'audio dei video (Opus)
+  try { E.ctx = new AC({ latencyHint: 'interactive', sampleRate: 48000 }); } catch (e) { E.ctx = new AC({ latencyHint: 'interactive' }); }
   await E.ctx.resume();
   E.sr = E.ctx.sampleRate;
   E.master = E.ctx.createGain(); E.master.connect(E.ctx.destination);
@@ -321,6 +329,74 @@ async function initAudio() {
   E.node.connect(sink); E.micGain.connect(E.node);
 }
 
+/* Pulizia della voce prima della registrazione: riduzione rumore AI (RNNoise) e noise gate */
+const GATE_SRC = `
+class OnAirGate extends AudioWorkletProcessor {
+  static get parameterDescriptors() { return [{ name: 'thr', defaultValue: -42 }, { name: 'on', defaultValue: 1 }, { name: 'pre', defaultValue: 1 }]; }
+  constructor() {
+    super(); const sr = sampleRate; this.L = Math.round(0.025 * sr); this.buf = new Float32Array(this.L); this.w = 0;
+    this.ms = 0; this.g = 1; this.hold = 0; this.open = true; this.above = 0; this.n = 0; this.last = null;
+    this.kR = Math.exp(-1 / (0.02 * sr)); this.need = Math.round(0.03 * sr); this.holdN = Math.round(0.25 * sr);
+    this.atk = Math.exp(-1 / (0.003 * sr)); this.rel = Math.exp(-1 / (0.1 * sr));
+    // filtro passa-banda per la voce (circa 150-3000 Hz) sul segnale che comanda il gate: i clic dei tasti contano meno
+    const hp = Math.exp(-2 * Math.PI * 150 / sr), lp = Math.exp(-2 * Math.PI * 3000 / sr); this.hpA = hp; this.lpA = lp; this.h1 = 0; this.hx = 0; this.l1 = 0;
+  }
+  process(inputs, outputs, p) {
+    const a = inputs[0] && inputs[0][0], o = outputs[0] && outputs[0][0]; if (!o) return true;
+    if (!a) { o.fill(0); return true; }
+    const on = p.on[0] > 0.5, pre = Math.max(1e-3, p.pre[0]), thr = Math.pow(10, p.thr[0] / 20) / pre, t2 = thr * thr, tc2 = t2 * 0.25;
+    for (let k = 0; k < a.length; k++) {
+      const x = a[k];
+      const d = this.buf[this.w]; this.buf[this.w] = x; this.w = (this.w + 1) % this.L;   // ritardo di 25 ms: il gate «vede» in anticipo
+      if (!on) { o[k] = d; this.open = true; continue; }
+      const h = this.hpA * (this.h1 + x - this.hx); this.h1 = h; this.hx = x; this.l1 = this.l1 * this.lpA + h * (1 - this.lpA);
+      this.ms = this.ms * this.kR + this.l1 * this.l1 * (1 - this.kR);
+      if (this.ms > t2) { if (++this.above > this.need) { this.open = true; this.hold = this.holdN; } }
+      else { this.above = Math.max(0, this.above - 2); if (this.hold > 0) this.hold--; else if (this.ms < tc2) this.open = false; }
+      const t = this.open ? 1 : 0.032; this.g = t + (this.g - t) * (t > this.g ? this.atk : this.rel); o[k] = d * this.g;
+    }
+    if (++this.n % 8 === 0 && this.last !== this.open) { this.last = this.open; this.port.postMessage(this.open); }
+    return true;
+  }
+}
+registerProcessor('onair-gate', OnAirGate);`;
+const NS = {
+  rnn: null, gate: null, loaded: false, err: null,
+  async load() {
+    if (this.loaded) return; const ctx = E.ctx;
+    try { await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([GATE_SRC], { type: 'application/javascript' }))); this.gate = new AudioWorkletNode(ctx, 'onair-gate', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit' }); this.gate.port.onmessage = (e) => { this.open = e.data; document.querySelectorAll('#liveStrips .gled, #setGateLed').forEach(l => l.classList.toggle('closed', !e.data)); }; } catch (e) { console.warn('gate', e); this.gate = null; }
+    try {
+      if (ctx.sampleRate !== 48000) throw new Error('serve l\'audio a 48 kHz');
+      const simd = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]));
+      const bin = await (await fetch(simd ? 'lib/ns/rnnoise_simd.wasm' : 'lib/ns/rnnoise.wasm')).arrayBuffer();
+      await ctx.audioWorklet.addModule('lib/ns/rnnoise-worklet.js');
+      this.rnn = new AudioWorkletNode(ctx, '@sapphi-red/web-noise-suppressor/rnnoise', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit', processorOptions: { maxChannels: 1, wasmBinary: bin } });
+    } catch (e) { console.warn('rnnoise', e); this.rnn = null; this.err = e.message || String(e); }
+    this.loaded = true;
+  },
+  /* micSrc → [RNNoise] → [gate] → micGain (registrazione e indicatori) */
+  async wire() {
+    if (!E.micSrc) return; const st = S.settings;
+    if ((st.nsAi || st.gate) && E.recMode === 'worklet') await this.load();
+    for (const n of [E.micSrc, this.rnn, this.gate]) if (n) try { n.disconnect(); } catch (e) {}
+    let n = E.micSrc;
+    if (st.nsAi && this.rnn) { n.connect(this.rnn); n = this.rnn; }
+    if (st.gate && this.gate) { n.connect(this.gate); n = this.gate; this.setGate(); }
+    n.connect(E.micGain);
+    document.querySelectorAll('#liveStrips .gled, #setGateLed').forEach(l => { l.hidden = !(st.gate && this.gate); l.classList.remove('closed'); });
+  },
+  setGate() { if (!this.gate) return; const t = E.ctx.currentTime; this.gate.parameters.get('thr').setValueAtTime(S.settings.gateThr ?? -35, t); this.gate.parameters.get('on').setValueAtTime(S.settings.gate ? 1 : 0, t); this.gate.parameters.get('pre').setValueAtTime(dbl(S.settings.micGain || 0), t); },
+  /* Prova: registra 6 secondi prima e dopo la pulizia, da riascoltare a confronto */
+  async test(onTick) {
+    const mk = () => { const d = E.ctx.createMediaStreamDestination(); return { d, rec: new MediaRecorder(d.stream), parts: [] }; };
+    const raw = mk(), clean = mk(); E.micSrc.connect(raw.d); E.micGain.connect(clean.d);
+    for (const r of [raw, clean]) { r.rec.ondataavailable = (e) => r.parts.push(e.data); r.rec.start(); }
+    for (let k = 6; k > 0; k--) { onTick && onTick(k); await new Promise(r => setTimeout(r, 1000)); }
+    const stop = (r) => new Promise(res => { r.rec.onstop = res; r.rec.stop(); }); await Promise.all([stop(raw), stop(clean)]);
+    try { E.micSrc.disconnect(raw.d); E.micGain.disconnect(clean.d); } catch (e) {}
+    return { raw: URL.createObjectURL(new Blob(raw.parts, { type: raw.rec.mimeType })), clean: URL.createObjectURL(new Blob(clean.parts, { type: clean.rec.mimeType })) };
+  }
+};
 async function initMic() {
   if (E.micStream) { E.micStream.getTracks().forEach(t => t.stop()); E.micStream = null; }
   if (E.micSrc) { try { E.micSrc.disconnect(); } catch (e) {} E.micSrc = null; }
@@ -329,7 +405,7 @@ async function initMic() {
       deviceId: S.settings.micId ? { exact: S.settings.micId } : undefined,
       echoCancellation: false, noiseSuppression: !!S.settings.ns, autoGainControl: false, channelCount: 1 } });
     E.micSrc = E.ctx.createMediaStreamSource(E.micStream);
-    E.micSrc.connect(E.micGain);
+    await NS.wire();
     E.micOk = true;
   } catch (e) {
     console.warn('Microfono', e); E.micOk = false;
@@ -338,7 +414,7 @@ async function initMic() {
   renderStatus();
 }
 
-function setMicGain(db) { S.settings.micGain = db; saveSettings(); if (E.micGain) E.micGain.gain.setTargetAtTime(dbl(db), E.ctx.currentTime, 0.02); const o = $('dMicGainO'); if (o) o.textContent = '+' + db + ' dB'; const r = $('dMicGain'); if (r) r.value = db; const lr = $('liveStrips-voice-in'); if (lr) { lr.value = db; lr.nextElementSibling.textContent = '+' + db + ' dB'; } }
+function setMicGain(db) { S.settings.micGain = db; saveSettings(); NS.setGate(); if (E.micGain) E.micGain.gain.setTargetAtTime(dbl(db), E.ctx.currentTime, 0.02); const o = $('dMicGainO'); if (o) o.textContent = '+' + db + ' dB'; const r = $('dMicGain'); if (r) r.value = db; const lr = $('liveStrips-voice-in'); if (lr) { lr.value = db; lr.nextElementSibling.textContent = '+' + db + ' dB'; } }
 function applyLevels() { if (!E.ctx) return; for (const ch of ALL) E.strips[ch].set(S.mix[ch], S.mutes[ch]); }
 
 async function decodeFile(id, sr) {
@@ -2041,7 +2117,7 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
   const bars = style === 'bars';
   for (const ch of ALL) {
     const p = mix[ch]; const d = document.createElement('div'); d.className = 'strip'; d.dataset.ch = ch; const pre = host.id + '-' + ch;
-    d.innerHTML = `<div class="h"><i class="dot"></i><b>${CH_LABEL[ch]}</b><span class="v"></span></div>
+    d.innerHTML = `<div class="h"><i class="dot"></i><b>${CH_LABEL[ch]}</b>${mutes && ch === 'voice' ? `<span class="gled" ${S.settings.gate && NS.gate ? '' : 'hidden'} title="Noise gate: verde = microfono aperto">GATE</span>` : ''}<span class="v"></span></div>
       <canvas class="eqc" title="Curva dell'EQ: apri «Gain ed EQ» per cambiarla"></canvas>
       <div class="cs-main">
         ${meters ? '<div class="mcol"><output class="pk">−∞</output><canvas class="mtr"></canvas></div>' : ''}
@@ -3071,6 +3147,19 @@ function wire() {
 
   $('setRetake').addEventListener('change', (e) => { S.settings.retakeSec = Math.max(1, Math.min(60, +e.target.value || 5)); saveSettings(); });
   $('setPre').addEventListener('change', (e) => { S.settings.preroll = Math.max(0, Math.min(10, +e.target.value || 0)); saveSettings(); });
+  const nsUI = () => { $('setNsAi').value = S.settings.nsAi ? '1' : '0'; $('setGate').value = S.settings.gate ? '1' : '0'; $('setGateThr').value = S.settings.gateThr ?? -35; $('setGateThrO').textContent = (S.settings.gateThr ?? -35) + ' dB'; $('setGateThr').disabled = !S.settings.gate; $('nsMsg').textContent = S.settings.nsAi && NS.loaded && !NS.rnn ? 'Riduzione AI non disponibile qui: ' + NS.err : ''; };
+  nsUI();
+  const nsChange = async () => { saveSettings(); if (R.state !== 'idle') { nsUI(); return toast('Vale dalla prossima registrazione'); } await NS.wire(); nsUI(); };
+  $('setNsAi').addEventListener('change', (e) => { S.settings.nsAi = e.target.value === '1'; nsChange(); });
+  $('setGate').addEventListener('change', (e) => { S.settings.gate = e.target.value === '1'; nsChange(); });
+  $('setGateThr').addEventListener('input', (e) => { S.settings.gateThr = +e.target.value; $('setGateThrO').textContent = e.target.value + ' dB'; NS.setGate(); saveSettings(); });
+  $('nsTest').addEventListener('click', async () => {
+    if (R.state !== 'idle') return toast('Prova a registrazione ferma'); if (!E.micOk) return toast('Microfono non attivo');
+    const b = $('nsTest'); b.disabled = true; $('nsPlay').hidden = true;
+    try { const u = await NS.test((k) => { b.textContent = '🔴 Parla e scrivi… ' + k; }); $('nsRaw').src = u.raw; $('nsClean').src = u.clean; $('nsPlay').hidden = false; }
+    catch (e) { toast('Prova non riuscita: ' + e.message); }
+    b.disabled = false; b.textContent = '🎙 Prova: parla e scrivi per 6 secondi';
+  });
   $('setNs').addEventListener('change', async (e) => { S.settings.ns = e.target.value === '1'; saveSettings(); if (R.state === 'idle') await initMic(); else toast('Vale dalla prossima registrazione'); });
   $('setDev').addEventListener('click', () => { $('setModal').hidden = true; DEV.open(); });
   LAY.wire(); LAY.apply(S.settings.layout || 'classico'); ORIENT.apply();

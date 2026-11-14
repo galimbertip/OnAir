@@ -197,6 +197,9 @@ body.wide .vcard>.vbox{flex:none}
 body.wide .vcard>.vctl{display:none}
 body.wide .vcard.adj>.vctl{display:flex;position:absolute;left:8px;right:8px;top:48px;bottom:8px;z-index:15;overflow:auto;flex-direction:column;gap:8px;padding:10px 12px;background:rgba(8,12,22,.96);border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
 .vctl-h{display:none}
+.gled{display:inline-block;font:700 9px var(--f-mono,monospace);letter-spacing:.1em;padding:1px 5px;border-radius:4px;border:1px solid #2cff9a;color:#2cff9a;margin-left:6px;vertical-align:middle}
+.gled.closed{border-color:var(--line2);color:var(--muted,#667);opacity:.6}
+#nsPlay audio{height:32px;max-width:220px}
 body.wide .vctl-h{display:flex;align-items:center;gap:8px;font:700 11px var(--f-display);letter-spacing:.2em;color:var(--violet);padding:2px 0}
 .vctl-h .sp{flex:1}
 #vAdjust{display:none}
@@ -458,7 +461,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.6.1</span>
+    <span class="ver" id="bootVer">V3.7.0</span>
   </div>
 </div>
 
@@ -466,7 +469,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.6.1</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.7.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -618,7 +621,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.6.1</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.7.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -721,6 +724,15 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <label for="setPre">Pre-ascolto prima di ripartire (s)</label><input type="number" id="setPre" min="0" max="10" step="0.5">
       <label for="setNs">Riduzione rumore del browser</label><select id="setNs"><option value="0">Spenta (consigliato a casa)</option><option value="1">Accesa (utile in viaggio)</option></select>
     </div>
+    <h3 style="font-size:13px">PULIZIA DELLA VOCE</h3>
+    <p class="note" style="margin:0">Si applica mentre registri: quello che senti nella prova è quello che finisce nella puntata.</p>
+    <div class="form">
+      <label for="setNsAi">Riduzione rumore AI (tastiera, clic, ventole)</label><select id="setNsAi"><option value="0">Spenta</option><option value="1">Accesa</option></select>
+      <label for="setGate">Noise gate (abbassa il microfono quando non parli)</label><select id="setGate"><option value="0">Spento</option><option value="1">Acceso</option></select>
+      <label for="setGateThr">Soglia del gate</label><span class="row" style="flex-wrap:nowrap"><input type="range" id="setGateThr" min="-70" max="-15" step="1" style="flex:1"><output id="setGateThrO"></output><span class="gled" id="setGateLed" title="Acceso = microfono aperto">GATE</span></span>
+    </div>
+    <div class="row"><button id="nsTest">🎙 Prova: parla e scrivi per 6 secondi</button><span class="note" id="nsMsg"></span></div>
+    <div class="row" id="nsPlay" hidden><span class="note">Originale</span><audio id="nsRaw" controls></audio><span class="note">Pulita</span><audio id="nsClean" controls></audio></div>
     <h3 style="font-size:13px">SINCRONIZZAZIONE TRA DISPOSITIVI</h3>
     <p class="note" style="margin:0">Tieni le stesse impostazioni sul PC di casa, sul portatile e sul tablet. OnAir le salva in un tuo repository <b>privato</b> su GitHub. Le registrazioni non vengono sincronizzate: per quelle usa «Trasferisci» in Sessioni.</p>
     <details class="eq"><summary>Come si collega (una volta sola per dispositivo)</summary>
