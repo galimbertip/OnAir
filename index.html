@@ -197,6 +197,14 @@ body.wide .vcard>.vbox{flex:none}
 body.wide .vcard>.vctl{display:none}
 body.wide .vcard.adj>.vctl{display:flex;position:absolute;left:8px;right:8px;top:48px;bottom:8px;z-index:15;overflow:auto;flex-direction:column;gap:8px;padding:10px 12px;background:rgba(8,12,22,.96);border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
 .vctl-h{display:none}
+.pt-text .w.rd{color:#8aa0b4}
+#ptRun.listen{border-color:#2cff9a;color:#2cff9a;box-shadow:0 0 12px rgba(44,255,154,.35)}
+.helpb{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.helpb section{border:1px solid var(--line2);border-radius:10px;padding:10px 12px}
+.helpb h4{margin:0 0 6px;font:700 11px var(--f-display);letter-spacing:.18em;color:var(--violet)}
+.helpb .hr{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:3px 0;font-size:13px}
+.helpb .hr.on{color:#2cff9a}
+.helpb .st{grid-column:1/-1;font:700 13px var(--f-mono,monospace);color:var(--cyan)}
 .gled{display:inline-block;font:700 9px var(--f-mono,monospace);letter-spacing:.1em;padding:1px 5px;border-radius:4px;border:1px solid #2cff9a;color:#2cff9a;margin-left:6px;vertical-align:middle}
 .gled.closed{border-color:var(--line2);color:var(--muted,#667);opacity:.6}
 #nsPlay audio{height:32px;max-width:220px}
@@ -468,7 +476,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.7.1</span>
+    <span class="ver" id="bootVer">V3.8.0</span>
   </div>
 </div>
 
@@ -476,7 +484,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.7.1</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.8.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -485,6 +493,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <button id="devBtn">Dispositivi</button>
     <button id="tpBtn" aria-pressed="true">Teleprompter</button>
     <button id="sessBtn">Sessioni</button>
+    <button id="helpBtn" title="Specchietto delle scorciatoie (H)">⌨ Tasti</button>
     <button id="setBtn">Impostazioni</button>
   </header>
 
@@ -502,8 +511,9 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="pt-bar">
       <h2>TELEPROMPTER</h2>
       <button id="ptRun" title="Avvia o ferma lo scorrimento">⏯ Scorri<span class="kbd" data-act="tpRun">P</span></button>
+      <select id="ptMode" aria-label="Come scorre il testo" title="Come scorre il testo (tasto M)"><option value="fixed">Velocità fissa</option><option value="voice">Scorre quando parlo</option><option value="follow">Segue le parole che leggo</option></select>
       <select id="ptStart" aria-label="Quando parte il testo" title="Quando parte lo scorrimento"><option value="intro">Parte dopo la sigla</option><option value="rec">Parte con la registrazione</option><option value="manual">Parte a mano</option></select>
-      <span class="grp" title="Velocità (frecce su e giù)">Velocità <button id="ptSlow" aria-label="Più lento">−</button><output id="ptSpeed">6</output><button id="ptFast" aria-label="Più veloce">+</button></span>
+      <span class="grp" id="ptSpeedGrp" title="Velocità (Maiusc + frecce su e giù)">Velocità <button id="ptSlow" aria-label="Più lento">−</button><output id="ptSpeed">6</output><button id="ptFast" aria-label="Più veloce">+</button></span>
       <span class="grp" title="Dimensione del testo">Testo <button id="ptSmall" aria-label="Testo più piccolo">A−</button><button id="ptBig" aria-label="Testo più grande">A+</button></span>
       <button id="ptAuto" aria-pressed="true" title="I segnali nel testo lanciano sigla, sottofondo e capitoli">Segnali automatici</button>
       <button id="ptMirror" aria-pressed="false" title="Testo a specchio, per i teleprompter con vetro">Specchio</button>
@@ -628,7 +638,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.7.1</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.8.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -800,10 +810,17 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p class="note" style="margin:0">Clicca il tasto accanto a un'azione e premi quello nuovo. Se è già usato, i due tasti si scambiano. I tasti 1–9 restano ai capitoli.</p>
     <div class="keylist" id="keyList"></div>
     <div class="row"><button id="keyReset">Ripristina tasti predefiniti</button></div>
+    <div class="form"><label for="setHelpRec">Specchietto delle scorciatoie</label><select id="setHelpRec"><option value="1">Si apre in una finestra a parte quando registro</option><option value="0">Solo quando lo apro io (tasto H)</option></select></div>
   </div>
 </div>
 
 <!-- Novità -->
+<div class="modal" id="helpModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="helpTitle">
+    <h3 id="helpTitle">SCORCIATOIE <span class="sp"></span><button id="helpPip" title="Finestra piccola che resta sopra le altre, anche sopra OBS o il browser">⧉ Finestra sempre in primo piano</button><button class="x" data-close="helpModal">Chiudi</button></h3>
+    <div class="helpb" id="helpBody"></div>
+  </div>
+</div>
 <div class="modal" id="clModal" hidden>
   <div class="sheet" role="dialog" aria-labelledby="clTitle">
     <h3 id="clTitle">NOVITÀ <span class="sp"></span><button class="x" data-close="clModal">Chiudi</button></h3>

@@ -3,9 +3,16 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.7.1' };
+const APP = { name: 'GPverse OnAir', version: '3.8.0' };
 
 const CHANGELOG = [
+  { v: '3.8.0', date: '14/11/2026', title: 'Teleprompter che segue la voce e specchietto dei tasti', items: [
+    'Teleprompter, tre modi di scorrimento (menu nella barra o tasto M): velocità fissa; «Scorre quando parlo» (si ferma nelle pause, ignora i tasti); «Segue le parole che leggo» (riconosce le parole e porta sulla riga di lettura quella che stai dicendo; se salti o improvvisi, aspetta).',
+    'Le parole già lette diventano più chiare. Nei segnali [SIGLA] [CAPITOLO]… non cambia niente: partono quando la riga li raggiunge.',
+    '[SOTTOFONDO] durante la sigla: il sottofondo parte quando la sigla è finita del tutto, non prima.',
+    'Specchietto delle scorciatoie: tasto H o pulsante «⌨ Tasti». «⧉ Finestra sempre in primo piano» lo apre in una finestrella che resta sopra le altre; si apre da sola quando registri (si può spegnere) e mostra cosa sta suonando e il prossimo capitolo. I tasti funzionano anche quando è attiva quella finestra.',
+    'Nuovi tasti: M (come scorre il teleprompter), H (specchietto).'
+  ] },
   { v: '3.7.1', date: '14/11/2026', title: 'Menu ⚙ del mixer a barre agganciato all\'ingranaggio', items: [
     'Corretto: nel mixer a barre il pannello ⚙ (gain, EQ, ingresso mic) compariva in un punto sbagliato dello schermo.',
     'Ora si apre come un menu a comparsa sopra l\'ingranaggio, con una freccia che lo indica (sotto, se in alto non c\'è spazio).',
@@ -591,6 +598,7 @@ function sessionName() {
 }
 async function recStart() {
   if (R.state !== 'idle') return;
+  HELP.onRecStart();
   if (!E.micOk) { toast('Microfono non disponibile: controlla il permesso nel browser o scegline un altro in Impostazioni'); return; }
   const id = 's' + Date.now();
   const lat = (E.ctx.outputLatency || 0) + (E.ctx.baseLatency || 0) + 0.01;
@@ -1901,23 +1909,96 @@ async function exportVideo(sess, opts, onProg) {
 }
 
 /* ------------------------------------------------------------------ Teleprompter */
+/* Parole: minuscole, senza accenti né punteggiatura (per confrontare testo e voce riconosciuta) */
+const normW = (w) => String(w).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+/* «Quando parlo»: il testo scorre solo mentre c'è voce nel microfono */
+const VAD = {
+  floor: -60, last: 0, buf: null, fb: null, t: 0, run: 0,
+  speaking(t) {
+    if (!E.micAn) return true;
+    if (t - this.t > 30) {
+      this.t = t; const an = E.micAn, b = this.buf || (this.buf = new Float32Array(an.fftSize)); an.getFloatTimeDomainData(b);
+      let s = 0; for (let i = 0; i < b.length; i++) s += b[i] * b[i]; const db = 10 * Math.log10(s / b.length + 1e-12);
+      this.floor = db < this.floor ? db : this.floor + 0.03; this.floor = Math.max(-80, Math.min(-35, this.floor));
+      // voce = energia concentrata tra 100 e 1000 Hz; i clic dei tasti hanno soprattutto acuti
+      const f = this.fb || (this.fb = new Float32Array(an.frequencyBinCount)); an.getFloatFrequencyData(f);
+      const hz = E.ctx.sampleRate / an.fftSize; let lo = 0, hi = 0;
+      for (let i = Math.round(100 / hz); i < Math.round(1000 / hz); i++) lo += Math.pow(10, f[i] / 10);
+      for (let i = Math.round(2000 / hz); i < Math.round(8000 / hz); i++) hi += Math.pow(10, f[i] / 10);
+      const voiced = db > Math.max(this.floor + 12, -52) && lo > hi * 1.5;
+      this.run = voiced ? this.run + 1 : 0;
+      if (this.run >= 3) this.last = t;   // almeno ~90 ms di voce di fila
+    }
+    return t - this.last < 450;
+  }
+};
+/* «Segue le parole»: riconoscimento vocale del browser; il testo va avanti man mano che leggi */
+const VF = {
+  rec: null, on: false, words: [], pos: 0, target: null, err: null, readTo: 0,
+  supported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
+  index() { if (!TP.el) return; this.words = [...TP.el.querySelectorAll('.w')].map(el => ({ el, n: normW(el.textContent) })); this.resync(); },
+  resync() {
+    if (!TP.view || !this.words.length) { this.pos = 0; this.target = null; return; }
+    const y = TP.view.scrollTop + TP.lineY() - 2; let i = this.words.findIndex(w => w.el.offsetTop + w.el.offsetHeight > y); if (i < 0) i = this.words.length;
+    this.pos = i; this.target = null; this.mark(i);
+  },
+  mark(i) {
+    const a = Math.min(this.readTo, i), b = Math.max(this.readTo, i);
+    for (let k = a; k < b && k < this.words.length; k++) this.words[k].el.classList.toggle('rd', k < i);
+    this.readTo = i;
+  },
+  start() {
+    if (this.on) return; if (!this.supported()) return this.fail('il browser non ha il riconoscimento vocale');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition, r = new SR();
+    r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onresult = (e) => { let txt = ''; for (let i = e.resultIndex; i < e.results.length; i++) txt += ' ' + e.results[i][0].transcript; this.hear(txt); };
+    r.onerror = (e) => { if (['not-allowed', 'service-not-allowed', 'network', 'language-not-supported', 'audio-capture'].includes(e.error)) this.fail(e.error === 'network' ? 'serve la connessione a internet' : e.error); };
+    r.onend = () => { if (this.on) setTimeout(() => { if (this.on) this.go(); }, 150); };
+    this.rec = r; this.on = true; this.resync(); this.go(); TP.layout();
+  },
+  go() { const tr = E.micStream && E.micStream.getAudioTracks()[0]; try { tr ? this.rec.start(tr) : this.rec.start(); } catch (e) { try { this.rec.start(); } catch (e2) {} } },
+  stop() { if (!this.on) return; this.on = false; try { this.rec.abort(); } catch (e) {} this.rec = null; TP.layout && TP.el && TP.layout(); },
+  fail(why) { this.err = why; this.stop(); TP.mode = 'voice'; TP.save(); TP.layout(); toast('«Segue le parole» non disponibile (' + why + '): passo a «Quando parlo»'); },
+  hear(txt) {
+    const tail = txt.split(/\s+/).map(normW).filter(Boolean).slice(-6); if (!tail.length || !this.words.length) return;
+    const W = this.words, L = tail.length, sim = (a, b) => a === b ? 1 : (a.length >= 4 && b.length >= 4 && a.slice(0, 4) === b.slice(0, 4)) ? 0.7 : 0;
+    let best = -1, bs = 0;
+    for (let j = Math.max(0, this.pos - 8); j < Math.min(W.length, this.pos + 80); j++) {
+      let sc = 0; for (let t = 0; t < L && j - t >= 0; t++) sc += sim(tail[L - 1 - t], W[j - t].n) * (t === 0 ? 1.2 : 1);
+      sc -= Math.abs(j - this.pos) * 0.008;
+      if (sc > bs) { bs = sc; best = j; }
+    }
+    if (best < 0) return;
+    const near = best >= this.pos && best <= this.pos + 3 && W[best].n.length >= 5 && tail[L - 1] === W[best].n;
+    if (bs < 1.6 && !near) return;
+    if (best + 1 < this.pos - 2 && bs < 3) return;
+    this.pos = best + 1; this.target = W[best].el; this.mark(this.pos);
+  }
+};
 const CUE_RE = /\[(SIGLA|STOP SIGLA|SOTTOFONDO|STOP SOTTOFONDO|CAPITOLO(?:\s+(\d{1,2}))?|STOP CAPITOLO|PAUSA|ISCRIVITI)\]/gi;
 const TP = {
-  text: '', running: false, speed: 6, size: 42, mirror: false, auto: true, visible: true, startMode: 'intro',
+  text: '', running: false, speed: 6, size: 42, mirror: false, auto: true, visible: true, startMode: 'intro', mode: 'fixed', bgAfterIntro: false,
   wasRunning: false, acc: 0, expect: 0, lastT: 0, lastLog: 0, cues: [],
   view: null, el: null,
   async load() {
     const st = await DB.get('state', 'prompter');
-    if (st) for (const k of ['text', 'speed', 'size', 'mirror', 'auto', 'visible', 'startMode']) if (k in st) this[k] = st[k];
+    if (st) for (const k of ['text', 'speed', 'size', 'mirror', 'auto', 'visible', 'startMode', 'mode']) if (k in st) this[k] = st[k];
   },
-  save() { const { text, speed, size, mirror, auto, visible, startMode } = this; DB.put('state', 'prompter', { text, speed, size, mirror, auto, visible, startMode }); SYNC.changed(); },
+  save() { const { text, speed, size, mirror, auto, visible, startMode, mode } = this; DB.put('state', 'prompter', { text, speed, size, mirror, auto, visible, startMode, mode }); SYNC.changed(); },
   render() {
     const esc = (t) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const paras = this.text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
-    this.el.innerHTML = paras.map(p => '<p>' + esc(p).replace(/\n/g, '<br>').replace(CUE_RE, (m, kind, n) => {
-      const k = kind.toUpperCase().replace(/\s+\d+$/, '');
-      return `<span class="cue" data-cue="${k}" data-n="${n || ''}">${esc(kind.toUpperCase())}</span>`;
-    }) + '</p>').join('');
+    // ogni parola in uno <span class="w">: serve al teleprompter che segue la voce
+    const plain = (t) => esc(t).replace(/[^\s]+/g, (w) => `<span class="w">${w}</span>`).replace(/\n/g, '<br>');
+    this.el.innerHTML = paras.map(p => {
+      let out = '', i = 0;
+      for (const m of p.matchAll(CUE_RE)) {
+        out += plain(p.slice(i, m.index)); const kind = m[1], n = m[2], k = kind.toUpperCase().replace(/\s+\d+$/, '');
+        out += `<span class="cue" data-cue="${k}" data-n="${n || ''}">${esc(kind.toUpperCase())}</span>`; i = m.index + m[0].length;
+      }
+      return '<p>' + out + plain(p.slice(i)) + '</p>';
+    }).join('');
+    VF.index();
     this.cues = [...this.el.querySelectorAll('.cue')];
     $('ptEmpty').hidden = !!paras.length;
     this.layout(); this.syncFired();
@@ -1930,13 +2011,14 @@ const TP = {
     $('ptSpeed').textContent = this.speed;
     $('ptAuto').setAttribute('aria-pressed', String(this.auto));
     $('ptMirror').setAttribute('aria-pressed', String(this.mirror));
-    $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode;
+    $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode; $('ptMode').value = this.mode;
+    $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); $('ptSpeedGrp').hidden = this.mode === 'follow';
     $('prompter').hidden = !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
   },
   lineY() { return this.view.clientHeight * 0.3; },
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
   syncFired() { const ly = this.lineY(); for (const c of this.cues) c.dataset.fired = this.cueY(c) <= ly ? '1' : '0'; },
-  setTop(y) { this.view.scrollTop = y; this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); },
+  setTop(y) { this.view.scrollTop = y; this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); VF.resync(); },
   toggle() { this.running = !this.running; this.lastT = performance.now(); this.layout(); },
   nudge(dir) { if (!this.view) return; this.push = (this.push || 0) + dir * this.size * 1.45 * 0.6; },
   frame(t) {
@@ -1947,9 +2029,17 @@ const TP = {
       this.push -= step; if (Math.abs(this.push) < 0.5) this.push = 0;
       this.acc = Math.max(0, this.acc + step); this.view.scrollTop = this.acc; this.expect = this.view.scrollTop;
       if (step < 0) this.syncFired();
+      if (!this.push) VF.resync();
     }
-    if (this.running) {
-      this.acc += this.speed * 7 * (this.size / 42) * dt;
+    const follow = this.mode === 'follow';
+    if (follow && this.running && !VF.on) VF.start(); else if (VF.on && (!follow || !this.running)) VF.stop();
+    if (this.running && follow) {
+      // segue le parole riconosciute: la parola appena letta va verso la riga di lettura
+      if (VF.target) { const want = Math.max(0, VF.target.offsetTop - this.lineY() + VF.target.offsetHeight * 0.2); const d = want - this.acc;
+        if (d > 0 || d < -this.view.clientHeight * 0.5) { this.acc += d * Math.min(1, dt * 3.5); this.view.scrollTop = this.acc; this.expect = this.view.scrollTop; } }
+    } else if (this.running) {
+      const talk = this.mode === 'voice' ? VAD.speaking(t) : true;
+      if (talk) this.acc += this.speed * 7 * (this.size / 42) * dt;
       this.view.scrollTop = this.acc; this.expect = this.view.scrollTop;
       if (this.view.scrollTop + this.view.clientHeight >= this.view.scrollHeight - 1) { this.running = false; this.layout(); }
     }
@@ -1968,7 +2058,10 @@ const TP = {
     const k = c.dataset.cue, n = +c.dataset.n;
     if (k === 'SIGLA') introPlay();
     else if (k === 'STOP SIGLA') introStop();
-    else if (k === 'SOTTOFONDO') { if (E.bg.status === 'paused' || E.bg.status === 'stopped') bgToggle(); }
+    else if (k === 'SOTTOFONDO') {
+      if (E.voices.intro) { this.bgAfterIntro = true; toast('Il sottofondo parte quando la sigla è finita'); }
+      else if (E.bg.status === 'paused' || E.bg.status === 'stopped') bgToggle();
+    }
     else if (k === 'STOP SOTTOFONDO') { if (E.bg.status === 'playing') bgToggle(); }
     else if (k === 'CAPITOLO') capPlay(n ? n - 1 : E.capIdx);
     else if (k === 'STOP CAPITOLO') capStop();
@@ -1982,15 +2075,17 @@ const TP = {
     if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); }
     this.layout();
   },
-  onIntroEnd() { if (this.startMode === 'intro' && isRec() && !this.running && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.layout(); } },
-  onHold() { this.wasRunning = this.running; this.running = false; this.layout(); },
+  onIntroEnd() {
+    if (this.bgAfterIntro) { this.bgAfterIntro = false; if (isRec() && (E.bg.status === 'paused' || E.bg.status === 'stopped')) bgToggle(); }
+    if (this.startMode === 'intro' && isRec() && !this.running && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.layout(); } },
+  onHold() { this.wasRunning = this.running; this.running = false; this.bgAfterIntro = false; this.layout(); },
   onResume(Tq, w0) {
     R.tpLog = R.tpLog.filter(e => e.t <= Tq + 0.01);
     let y = null, run = null; for (const e of R.tpLog) { if (e.t <= w0 + 0.01) y = e.y; run = e.run; }
     if (y != null) this.setTop(y);
     this.running = run != null ? run : this.wasRunning; this.lastT = performance.now(); this.layout();
   },
-  onFinish() { this.running = false; this.layout(); },
+  onFinish() { this.running = false; this.bgAfterIntro = false; VF.stop(); this.layout(); HELP.onFinish(); },
   edit(on) {
     $('ptEditBox').hidden = !on; $('ptView').hidden = on;
     if (on) { $('ptArea').value = this.text; $('ptArea').focus(); }
@@ -2791,7 +2886,7 @@ async function applyStudio(items, groups) {
     if (it.store === 'files') { const isOv = String(it.key).startsWith('ov-'); if ((isOv && g.video) || (!isOv && g.audio)) await DB.put('files', it.key, it.value); continue; }
     if (it.store !== 'state') continue;
     const v = it.value;
-    if (it.key === 'prompter' && g.testo) cur.prompter = { ...(cur.prompter || {}), text: v.text, speed: v.speed, size: v.size, mirror: v.mirror, auto: v.auto, startMode: v.startMode };
+    if (it.key === 'prompter' && g.testo) cur.prompter = { ...(cur.prompter || {}), text: v.text, speed: v.speed, size: v.size, mirror: v.mirror, auto: v.auto, startMode: v.startMode, mode: v.mode };
     if (it.key === 'deck') { if (g.audio) cur.deck.deck = v.deck; if (g.mixer) { cur.deck.mix = v.mix; cur.deck.defaults = v.defaults; } }
     if (it.key === 'settings') for (const [grp, keys] of Object.entries(SYNC_KEYS)) if (g[grp]) for (const k of keys) if (k in v) cur.settings[k] = v[k];
   }
@@ -3026,10 +3121,15 @@ const ACTIONS = [
   ['rec', 'Registra / pausa / riprendi', ' '], ['retake', 'Re-take', 'r'], ['intro', 'Sigla', 's'], ['bg', 'Sottofondo play / pausa', 'b'],
   ['cap', 'Prossimo capitolo', 'Enter'], ['tpRun', 'Teleprompter: avvia / ferma', 'p'], ['tpShow', 'Teleprompter: mostra / nascondi', 't'],
   ['tpBack', 'Teleprompter: testo indietro', 'ArrowUp'], ['tpFwd', 'Teleprompter: testo avanti', 'ArrowDown'],
-  ['tpUp', 'Teleprompter: più veloce', 'Shift+ArrowUp'], ['tpDown', 'Teleprompter: più lento', 'Shift+ArrowDown'], ['video', 'Video sì / no', 'v'], ['sub', 'Animazione «Iscriviti»', 'i']
+  ['tpUp', 'Teleprompter: più veloce', 'Shift+ArrowUp'], ['tpDown', 'Teleprompter: più lento', 'Shift+ArrowDown'], ['video', 'Video sì / no', 'v'], ['sub', 'Animazione «Iscriviti»', 'i'], ['tpMode', 'Teleprompter: come scorre', 'm'], ['help', 'Specchietto delle scorciatoie', 'h']
 ];
 const DEF_KEYS = Object.fromEntries(ACTIONS.map(a => [a[0], a[2]]));
-const KEYS = () => S.settings.keys || (S.settings.keys = { ...DEF_KEYS });
+const KEYS = () => {
+  const k = S.settings.keys || (S.settings.keys = { ...DEF_KEYS });
+  // azioni nuove: prendono il tasto predefinito se non è già usato
+  for (const [a, d] of Object.entries(DEF_KEYS)) if (!(a in k)) k[a] = Object.values(k).includes(d) ? '' : d;
+  return k;
+};
 const normKey = (k, shift) => k.length === 1 ? k.toLowerCase() : (shift && !['Shift'].includes(k) ? 'Shift+' + k : k);
 const KNAMES = { ' ': 'Spazio', Enter: 'Invio', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', Tab: 'Tab', Backspace: '⌫' };
 const keyLabel = (act) => { let k = KEYS()[act] || ''; let pre = ''; if (k.startsWith('Shift+')) { pre = 'Shift+'; k = k.slice(6); } return pre + (KNAMES[k] || (k.length === 1 ? k.toUpperCase() : k)); };
@@ -3066,14 +3166,63 @@ document.addEventListener('keydown', (e) => {
   keys[act] = k; saveSettings(); renderKeys();
 }, true);
 
-/* Tastiera */
-document.addEventListener('keydown', (e) => {
+/* Specchietto delle scorciatoie: finestra nell'app (H) o finestra piccola sempre in primo piano */
+const HELP_GROUPS = [['Registrazione', ['rec', 'retake']], ['Audio', ['intro', 'bg', 'cap']], ['Teleprompter', ['tpRun', 'tpMode', 'tpBack', 'tpFwd', 'tpUp', 'tpDown', 'tpShow']], ['Video', ['video', 'sub']], ['Aiuto', ['help']]];
+const HELP = {
+  pip: null, iv: null,
+  html() {
+    const e2 = (t) => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const st = { idle: 'PRONTO', rec: '● REGISTRAZIONE', hold: R.holdMode === 'retake' ? '↶ RE-TAKE' : '❚❚ PAUSA', preroll: '▶ PRE-ASCOLTO' }[R.state] || '';
+    const name = (a) => (ACTIONS.find(x => x[0] === a) || [, a])[1].replace(/^Teleprompter: /, '');
+    const on = { bg: E.bg.status === 'playing', intro: !!E.voices.intro, tpRun: TP.running, video: S.settings.video.on };
+    const extra = { cap: S.deck.caps.length ? 'prossimo: ' + (nameOf(S.deck.caps[E.capIdx % S.deck.caps.length]) || '').replace(/\.[^.]+$/, '') : '', tpMode: { fixed: 'velocità fissa', voice: 'quando parli', follow: 'segue le parole' }[TP.mode] };
+    let h = `<div class="st">${st}${R.state === 'hold' ? ' · ← → secondi · Invio conferma · Esc annulla' : ''}</div>`;
+    for (const [g, acts] of HELP_GROUPS) {
+      h += `<section><h4>${g.toUpperCase()}</h4>`;
+      for (const a of acts) h += `<div class="hr${on[a] ? ' on' : ''}"><span>${e2(name(a))}${extra[a] ? ` <small style="opacity:.7">(${e2(extra[a])})</small>` : ''}</span><span class="kbd">${e2(keyLabel(a))}</span></div>`;
+      if (g === 'Audio') h += `<div class="hr"><span>Capitolo diretto</span><span class="kbd">1–9</span></div>`;
+      h += '</section>';
+    }
+    return h;
+  },
+  toggle() { const m = $('helpModal'); m.hidden = !m.hidden; if (!m.hidden) $('helpBody').innerHTML = this.html(); },
+  async openPip() {
+    if (this.pip && !this.pip.closed) return true;
+    try { if (window.documentPictureInPicture) { this.setup(await documentPictureInPicture.requestWindow({ width: 300, height: 600 })); return true; } } catch (e) { console.warn('pip', e); }
+    const w = window.open('', 'onair-tasti', 'popup,width=320,height=620'); if (w) { this.setup(w); return true; }
+    return false;
+  },
+  setup(w) {
+    this.pip = w; const d = w.document; d.title = 'OnAir · tasti';
+    d.head.innerHTML = `<meta charset="utf-8"><style>
+      body{margin:0;padding:10px;background:#05070d;color:#dfe9f5;font:14px system-ui,sans-serif}
+      .st{font:700 13px monospace;color:#22e4ff;margin:2px 0 8px}
+      section{border:1px solid #1d2a40;border-radius:8px;padding:6px 9px;margin-bottom:8px}
+      h4{margin:0 0 4px;font:700 10px sans-serif;letter-spacing:.18em;color:#8d7bff}
+      .hr{display:flex;justify-content:space-between;gap:8px;padding:2px 0;font-size:13px}.hr.on{color:#2cff9a}
+      .kbd{font:700 11px monospace;border:1px solid #33435e;border-radius:4px;padding:1px 6px;white-space:nowrap;color:#fff}</style>`;
+    d.body.innerHTML = '<div id="b"></div>';
+    d.addEventListener('keydown', (e) => onKeyMain(e));
+    w.addEventListener('pagehide', () => { this.pip = null; clearInterval(this.iv); });
+    clearInterval(this.iv); this.iv = setInterval(() => this.refresh(), 500); this.refresh();
+  },
+  refresh() {
+    if (this.pip && !this.pip.closed) { const b = this.pip.document.getElementById('b'); if (b) b.innerHTML = this.html(); }
+    if (!$('helpModal').hidden) $('helpBody').innerHTML = this.html();
+  },
+  onRecStart() { if (S.settings.helpOnRec !== false) this.openPip(); },
+  onFinish() { if (this.pip && !this.pip.closed && S.settings.helpOnRec !== false) { this.pip.close(); this.pip = null; clearInterval(this.iv); } }
+};
+
+/* Tastiera (anche dalla finestra dello specchietto) */
+document.addEventListener('keydown', (e) => onKeyMain(e));
+function onKeyMain(e) {
   const tg = e.target; if (tg && (tg.tagName === 'INPUT' && tg.type !== 'range' && tg.type !== 'checkbox' || tg.tagName === 'SELECT' || tg.tagName === 'TEXTAREA')) return;
   if (!E.ctx || e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
   if (ED.open) return;
   const anyModal = !$('sessModal').hidden || !$('setModal').hidden || !$('clModal').hidden || !$('devModal').hidden;
-  if (k === 'Escape') { closeSessions(); for (const m of ['setModal', 'clModal']) $(m).hidden = true; if (!$('devModal').hidden) DEV.close(); if (R.state === 'hold') { stopListen(); setHoldN(0); } e.preventDefault(); return; }
+  if (k === 'Escape') { closeSessions(); for (const m of ['setModal', 'clModal', 'helpModal']) $(m).hidden = true; if (!$('devModal').hidden) DEV.close(); if (R.state === 'hold') { stopListen(); setHoldN(0); } e.preventDefault(); return; }
   if (anyModal) return;
   const nk = normKey(k, e.shiftKey), keys = KEYS();
   const act = Object.keys(keys).find(a => keys[a] === nk);
@@ -3086,6 +3235,8 @@ document.addEventListener('keydown', (e) => {
   if (/^[1-9]$/.test(k)) { capPlay(+k - 1); return; }
   if (!act) return;
   e.preventDefault();
+  if (act === 'help') { HELP.toggle(); return; }
+  if (!$('helpModal').hidden) $('helpModal').hidden = true;
   if (act === 'rec') { if (R.state === 'idle') recStart(); else if (R.state === 'rec') enterHold('pause'); }
   else if (act === 'retake') enterHold('retake');
   else if (act === 'intro') introPlay();
@@ -3099,7 +3250,9 @@ document.addEventListener('keydown', (e) => {
   else if (act === 'tpUp') { TP.speed = Math.min(20, TP.speed + 1); TP.layout(); TP.save(); }
   else if (act === 'tpDown') { TP.speed = Math.max(1, TP.speed - 1); TP.layout(); TP.save(); }
   else if (act === 'video') { if (isRec() || blocked()) return toast('Attiva o disattiva il video a registrazione ferma'); S.settings.video.on = !S.settings.video.on; saveSettings(); renderStatus(); }
-});
+  else if (act === 'tpMode') { const L = ['fixed', 'voice', 'follow'], n = { fixed: 'velocità fissa', voice: 'scorre quando parli', follow: 'segue le parole che leggi' }; TP.mode = L[(L.indexOf(TP.mode) + 1) % 3]; TP.save(); TP.layout(); toast('Teleprompter: ' + n[TP.mode]); }
+  HELP.refresh();
+}
 
 /* Collegamenti */
 function wire() {
@@ -3144,6 +3297,11 @@ function wire() {
   window.addEventListener('resize', () => { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); });
   $('ptRun').addEventListener('click', () => TP.toggle());
   $('ptStart').addEventListener('change', (e) => { TP.startMode = e.target.value; TP.save(); });
+  $('ptMode').addEventListener('change', (e) => { TP.mode = e.target.value; TP.save(); TP.layout(); if (TP.mode === 'follow' && !VF.supported()) VF.fail('il browser non ha il riconoscimento vocale'); });
+  $('helpBtn').addEventListener('click', () => HELP.toggle());
+  $('helpPip').addEventListener('click', async () => { if (!(await HELP.openPip())) toast('Il browser ha bloccato la finestra: consenti i popup per questo sito'); else $('helpModal').hidden = true; });
+  $('setHelpRec').value = S.settings.helpOnRec === false ? '0' : '1';
+  $('setHelpRec').addEventListener('change', (e) => { S.settings.helpOnRec = e.target.value === '1'; saveSettings(); });
   $('ptSlow').addEventListener('click', () => { TP.speed = Math.max(1, TP.speed - 1); TP.layout(); TP.save(); });
   $('ptFast').addEventListener('click', () => { TP.speed = Math.min(20, TP.speed + 1); TP.layout(); TP.save(); });
   $('ptSmall').addEventListener('click', () => { TP.size = Math.max(20, TP.size - 4); TP.layout(); TP.save(); });
@@ -3164,7 +3322,7 @@ function wire() {
   $('sessBtn').addEventListener('click', () => openSessions());
   $('setBtn').addEventListener('click', openSettings);
   $('verBtn').addEventListener('click', openChangelog);
-  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => { if (b.dataset.close === 'sessModal') closeSessions(); else { $(b.dataset.close).hidden = true; if (b.dataset.close === 'setModal' && LAY.edit) { const e2 = LAY.edit; const saved = LAY.all()[S.settings.layout || 'classico']; if (JSON.stringify(e2) !== JSON.stringify(saved)) toast('Modifiche alla disposizione in prova: salvale come set personale per tenerle'); } } }));
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => { if (b.dataset.close === 'sessModal') closeSessions(); else $(b.dataset.close).hidden = true; }));
   for (const m of ['sessModal', 'setModal', 'clModal']) $(m).addEventListener('click', (e) => { if (e.target.id === m) { if (m === 'sessModal') closeSessions(); else $(m).hidden = true; } });
 
   $('setRetake').addEventListener('change', (e) => { S.settings.retakeSec = Math.max(1, Math.min(60, +e.target.value || 5)); saveSettings(); });

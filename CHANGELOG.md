@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.8.0 — 14/11/2026
+- Teleprompter: modi «Velocità fissa», «Scorre quando parlo» (rilevamento voce sulla banda 100–1000 Hz, ignora i clic) e «Segue le parole che leggo» (riconoscimento vocale del browser in italiano, allineamento sulle ultime parole dette; ripiega su «Quando parlo» se non disponibile). Tasto M.
+- [SOTTOFONDO] durante la sigla aspetta la fine della sigla.
+- Specchietto delle scorciatoie (H, «⌨ Tasti»), anche in finestra sempre in primo piano (Document Picture-in-Picture, o popup); si apre da solo quando registri; i tasti premuti lì comandano OnAir.
+
 ## V3.7.1 — 14/11/2026
 - Corretto: il pannello ⚙ del mixer a barre compariva in un punto sbagliato. Ora è un menu a comparsa agganciato all'ingranaggio (con freccia), trascinabile dalla testata, chiuso con ✕ o cliccando fuori.
 
