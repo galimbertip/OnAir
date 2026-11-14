@@ -7,6 +7,10 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.0.2 — 14/11/2026
+- Corretto: con «Scorre quando parlo» [PAUSA] fermava il testo per sempre. Ora attende una pausa e riparte quando riprendi a parlare (P lo fa ripartire subito); a velocità fissa invariato; con «Segue le parole» ignorato.
+- Pulsanti dei segnali nell'editor del testo generati dalle categorie audio.
+
 ## V4.0.1 — 14/11/2026
 - Corretto: un segnale lanciato all'avvio della registrazione (es. [SIGLA] appena sotto la riga di lettura) ripartiva quando il testo lo raggiungeva. Ora resta lanciato.
 

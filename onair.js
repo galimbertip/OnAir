@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.0.1' };
+const APP = { name: 'GPverse OnAir', version: '4.0.2' };
 
 const CHANGELOG = [
+  { v: '4.0.2', date: '14/11/2026', title: '[PAUSA] con lo scorrimento a voce', items: [
+    'Corretto: con «Scorre quando parlo» il segnale [PAUSA] fermava il testo per sempre (bisognava premere P). Ora il testo aspetta che tu faccia una pausa e riparte da solo quando riprendi a parlare; il pulsante Scorri diventa giallo mentre aspetta. P lo fa ripartire subito. A velocità fissa resta come prima.',
+    'Con «Segue le parole che leggo» [PAUSA] non serve: il testo segue già la tua voce.',
+    'I pulsanti dei segnali nell\'editor del testo ora corrispondono alle tue categorie audio.'
+  ] },
   { v: '4.0.1', date: '14/11/2026', title: 'Sigla lanciata una volta sola', items: [
     'Corretto: con [SIGLA] appena sotto la riga di lettura la sigla partiva all\'avvio della registrazione e poi di nuovo quando il testo, scorrendo, raggiungeva il segnale. Ora un segnale partito all\'avvio non riparte più.'
   ] },
@@ -2095,14 +2100,14 @@ const TP = {
     $('ptAuto').setAttribute('aria-pressed', String(this.auto));
     $('ptMirror').setAttribute('aria-pressed', String(this.mirror));
     $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode; $('ptMode').value = this.mode;
-    $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); $('ptSpeedGrp').hidden = this.mode === 'follow';
+    $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); $('ptRun').classList.toggle('waiting', !!(this.running && this.voiceWait)); $('ptSpeedGrp').hidden = this.mode === 'follow';
     $('prompter').hidden = !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
   },
   lineY() { return this.view.clientHeight * 0.3; },
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
   syncFired() { const ly = this.lineY(); for (const c of this.cues) c.dataset.fired = (this.cueY(c) <= ly || c.dataset.pre === '1') ? '1' : '0'; },
   setTop(y) { this.view.scrollTop = y; this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); VF.resync(); },
-  toggle() { this.running = !this.running; this.lastT = performance.now(); this.layout(); },
+  toggle() { if (this.voiceWait && this.running) { this.voiceWait = null; this.lastT = performance.now(); this.layout(); return; } this.running = !this.running; this.voiceWait = null; this.lastT = performance.now(); this.layout(); },
   nudge(dir) { if (!this.view) return; this.push = (this.push || 0) + dir * this.size * 1.45 * 0.6; },
   frame(t) {
     const dt = Math.min(0.1, (t - (this.lastT || t)) / 1000); this.lastT = t;
@@ -2121,7 +2126,8 @@ const TP = {
       if (VF.target) { const want = Math.max(0, VF.target.offsetTop - this.lineY() + VF.target.offsetHeight * 0.2); const d = want - this.acc;
         if (d > 0 || d < -this.view.clientHeight * 0.5) { this.acc += d * Math.min(1, dt * 3.5); this.view.scrollTop = this.acc; this.expect = this.view.scrollTop; } }
     } else if (this.running) {
-      const talk = this.mode === 'voice' ? VAD.speaking(t) : true;
+      let talk = this.mode === 'voice' ? VAD.speaking(t) : true;
+      if (this.voiceWait) { if (!talk) this.voiceWait.quiet = true; else if (this.voiceWait.quiet) { this.voiceWait = null; this.layout(); } if (this.voiceWait) talk = false; }
       if (talk) this.acc += this.speed * 7 * (this.size / 42) * dt;
       this.view.scrollTop = this.acc; this.expect = this.view.scrollTop;
       if (this.view.scrollTop + this.view.clientHeight >= this.view.scrollHeight - 1) { this.running = false; this.layout(); }
@@ -2141,7 +2147,11 @@ const TP = {
     c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 900);
     const k = c.dataset.cue, n = +c.dataset.n;
     if (k === 'ISCRIVITI') SUB.start();
-    else if (k === 'PAUSA') { this.running = false; this.layout(); toast('Testo fermo: premi P per farlo ripartire'); }
+    else if (k === 'PAUSA') {
+      // a velocità fissa il testo si ferma finché premi P; nei modi a voce aspetta che tu taccia e poi riprenda a parlare
+      if (this.mode === 'fixed') { this.running = false; this.layout(); toast('Testo fermo: premi P per farlo ripartire'); }
+      else if (this.mode === 'voice') { this.voiceWait = { quiet: false }; this.layout(); toast('Pausa: il testo riparte quando riprendi a parlare'); }
+    }
     else {
       const stop = /^STOP /.test(k), cat = CATS().find(x => cueWord(x) === k.replace(/^STOP /, '')); if (!cat) return;
       if (stop) catStop(cat.id);
@@ -2165,14 +2175,14 @@ const TP = {
     if (this.pendingLoops.size && !singlePlaying()) { const l = [...this.pendingLoops]; this.pendingLoops.clear(); if (isRec()) for (const c of l) if (['paused', 'stopped'].includes(loopSt(c).status)) loopToggle(c); }
     const fs = firstSingle(); if (!fs || fs.id !== id) return;
     if (this.startMode === 'intro' && isRec() && !this.running && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.layout(); } },
-  onHold() { this.wasRunning = this.running; this.running = false; this.pendingLoops.clear(); this.layout(); },
+  onHold() { this.wasRunning = this.running; this.running = false; this.voiceWait = null; this.pendingLoops.clear(); this.layout(); },
   onResume(Tq, w0) {
     R.tpLog = R.tpLog.filter(e => e.t <= Tq + 0.01);
     let y = null, run = null; for (const e of R.tpLog) { if (e.t <= w0 + 0.01) y = e.y; run = e.run; }
     if (y != null) this.setTop(y);
     this.running = run != null ? run : this.wasRunning; this.lastT = performance.now(); this.layout();
   },
-  onFinish() { this.running = false; this.pendingLoops.clear(); for (const c of this.cues || []) delete c.dataset.pre; VF.stop(); this.layout(); HELP.onFinish(); },
+  onFinish() { this.running = false; this.voiceWait = null; this.pendingLoops.clear(); for (const c of this.cues || []) delete c.dataset.pre; VF.stop(); this.layout(); HELP.onFinish(); },
   edit(on) {
     $('ptEditBox').hidden = !on; $('ptView').hidden = on;
     if (on) { $('ptArea').value = this.text; $('ptArea').focus(); }
@@ -3423,6 +3433,20 @@ function onKeyMain(e) {
   HELP.refresh();
 }
 
+/* Pulsanti dei segnali nell'editor del testo, uno per categoria */
+function renderInsButtons() {
+  const box = $('ptIns'); if (!box) return; const ins = [], help = [];
+  const e2 = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  for (const c of CATS()) {
+    const w = cueWord(c);
+    if (c.type === 'single') { ins.push(`[${w}]`); help.push(`[${w}] fa partire ${c.name}`); }
+    else if (c.type === 'loop') { ins.push(`[${w}]`, `[STOP ${w}]`); help.push(`[${w}] avvia ${c.name} · [STOP ${w}] lo mette in pausa`); }
+    else { ins.push(`[${w}]`, `[${w} 2]`); help.push(`[${w}] lancia il prossimo di ${c.name} · [${w} 2] il numero 2 · [STOP ${w}] lo ferma`); }
+  }
+  ins.push('[PAUSA]', '[ISCRIVITI]');
+  box.innerHTML = ins.map(v => `<button data-ins="${e2(v)}">${e2(v.replace(/ 2\]$/, ' n]'))}</button>`).join('');
+  $('ptInsNote').textContent = help.join(' · ') + ' · [PAUSA] ferma il testo (a velocità fissa riparte con P, con «Scorre quando parlo» quando riprendi a parlare) · [ISCRIVITI] lancia l\'animazione «Iscriviti».';
+}
 /* Impostazioni → Categorie audio */
 const CAT_COLORS = ['#00b3ff', '#ff7a00', '#b46bff', '#ff4d6d', '#7dff3a', '#00ffd0', '#ffb3f0', '#ffffff'];
 const CATUI = {
@@ -3467,7 +3491,7 @@ const CATUI = {
   apply() {
     rebuildActions(); normDeck(); for (const ch of allOf()) ensureStrip(ch);
     DECKUI.build(); LAY.apply(S.settings.layout || 'classico'); ORIENT.apply(); if (ORIENT.onWide) ORIENT.onWide();
-    renderKeys(); renderDeck(); TP.render(); LAY.renderSettings(); this.render();
+    renderKeys(); renderDeck(); TP.render(); renderInsButtons(); LAY.renderSettings(); this.render();
     saveSettings(); saveDeck();
   }
 };
@@ -3517,10 +3541,12 @@ function wire() {
   $('ptEditBtn').addEventListener('click', () => { if (isRec() || blocked()) return toast('Modifica il testo a registrazione ferma'); TP.edit(true); });
   $('ptCancel').addEventListener('click', () => TP.edit(false));
   $('ptSave').addEventListener('click', () => { TP.text = $('ptArea').value; TP.save(); TP.edit(false); TP.render(); TP.setTop(0); });
-  document.querySelectorAll('[data-ins]').forEach(b => b.addEventListener('click', () => {
+  renderInsButtons();
+  $('ptIns').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ins]'); if (!b) return;
     const ta = $('ptArea'), v = b.dataset.ins, s0 = ta.selectionStart, s1 = ta.selectionEnd;
     ta.setRangeText(' ' + v + ' ', s0, s1, 'end'); ta.focus();
-  }));
+  });
   $('ptLoad').addEventListener('click', () => { if (isRec() || blocked()) return toast('Carica il testo a registrazione ferma'); $('fileScript').click(); });
   $('fileScript').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; TP.text = await f.text(); TP.save(); TP.edit(false); TP.render(); TP.setTop(0); toast('Testo caricato: ' + f.name); });
 
