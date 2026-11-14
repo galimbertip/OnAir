@@ -3,9 +3,16 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.3.1' };
+const APP = { name: 'GPverse OnAir', version: '3.4.0' };
 
 const CHANGELOG = [
+  { v: '3.4.0', date: '14/11/2026', title: 'Mixer a barre e regolazioni video a comparsa', items: [
+    'Nuovo mixer «a barre»: una riga per fonte (indicatore di livello, fader, ↺, MUTE, ⚙), in due colonne con il livello voce di lato. In vista orizzontale è quello di base e occupa metà spazio.',
+    '⚙ apre gain, EQ e (sulla voce) ingresso del microfono in un pannello sopra la riga; si chiude con ✕ o cliccando fuori.',
+    'Con più fonti le righe del mixer scorrono in verticale.',
+    'Vista orizzontale: il riquadro VIDEO mostra solo l\'anteprima, grande e intera; contorni, inquadratura, green screen, sfondo e logo si aprono con «⚙ Regola».',
+    'Il pulsante del mixer passa tra a barre, console e compatto; in Impostazioni scegli lo stile per la vista orizzontale e per quella verticale.'
+  ] },
   { v: '3.3.1', date: '14/11/2026', title: 'Vista orizzontale senza tagli', items: [
     'Corretto: in vista orizzontale video, sottofondo e capitoli venivano tagliati in altezza.',
     'L\'anteprima video si rimpicciolisce per stare nel riquadro; i comandi video scorrono sotto.',
@@ -222,7 +229,7 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.12 } },
+  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.12 } },
   names: new Map()
 };
 async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); SYNC.changed(); }
@@ -1880,9 +1887,22 @@ function drawMeter(cv, db, ref) {
   } else { g.fillRect(0, 0, lv, h); g.fillStyle = '#fff'; g.fillRect(pos(ref.hold) - 1, 0, 2, h); }
   if (ref.out) { ref.out.textContent = ref.hold <= -59 ? '−∞' : ref.hold.toFixed(1); ref.out.classList.toggle('clip', ref.hold > -1); }
 }
+const inmicHtml = (pre) => `<label class="fad inmic" for="${pre}-in" title="Guadagno del microfono: alza il livello registrato"><span class="fl">Ingresso mic</span><span class="row" style="flex-wrap:nowrap"><input type="range" id="${pre}-in" min="0" max="30" step="1" style="flex:1"><output class="v">+0 dB</output></span></label>`;
+const mixStyleNow = () => ORIENT.wide ? (S.settings.mixStyleWide || 'bars') : (S.settings.mixStyle || 'console');
+/* Mixer a barre: "Gain ed EQ" si apre in un pannello sopra la riga, fuori dal mixer */
+function placeEqPop(de) {
+  const pop = de.querySelector('.eqpop');
+  if (!de.open) { pop.style.cssText = ''; return; }
+  document.querySelectorAll('#liveStrips details.eq[open]').forEach(o => { if (o !== de) o.open = false; });
+  const r = de.querySelector('summary').getBoundingClientRect(), w = Math.min(400, innerWidth - 24);
+  const left = Math.max(12, Math.min(innerWidth - w - 12, r.right - w));
+  Object.assign(pop.style, { position: 'fixed', left: left + 'px', width: w + 'px', bottom: (innerHeight - r.top + 8) + 'px', maxHeight: Math.max(200, r.top - 24) + 'px' });
+}
 function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
   host.replaceChildren(); const refs = {};
-  host.classList.toggle('console', (S.settings.mixStyle || 'console') === 'console');
+  let style = host.id === 'liveStrips' ? mixStyleNow() : (S.settings.mixStyle || 'console'); if (style === 'bars' && host.id !== 'liveStrips') style = 'console';
+  host.classList.toggle('console', style === 'console'); host.classList.toggle('bars', style === 'bars');
+  const bars = style === 'bars';
   for (const ch of ALL) {
     const p = mix[ch]; const d = document.createElement('div'); d.className = 'strip'; d.dataset.ch = ch; const pre = host.id + '-' + ch;
     d.innerHTML = `<div class="h"><i class="dot"></i><b>${CH_LABEL[ch]}</b><span class="v"></span></div>
@@ -1892,8 +1912,8 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
         <label class="fad" for="${pre}-vol"><span class="fl">${mutes ? 'Volume cuffia' : 'Volume'}</span><input type="range" class="vol" id="${pre}-vol" min="0" max="150" step="1"></label>
       </div>
       <div class="cs-btns"><button class="rst" title="Riporta al predefinito">↺</button>${mutes ? '<button class="mute" aria-pressed="false">MUTE</button>' : ''}</div>
-      ${mutes && ch === 'voice' ? `<label class="fad inmic" for="${pre}-in" title="Guadagno del microfono: alza il livello registrato"><span class="fl">Ingresso mic</span><span class="row" style="flex-wrap:nowrap"><input type="range" id="${pre}-in" min="0" max="30" step="1" style="flex:1"><output class="v">+0 dB</output></span></label>` : ''}
-      <details class="eq"><summary>Gain ed EQ</summary><div class="knobs"></div><button class="def">★ Usa questi valori come predefiniti</button></details>`;
+      ${mutes && ch === 'voice' && !bars ? inmicHtml(pre) : ''}
+      <details class="eq"><summary title="Gain, EQ${mutes && ch === 'voice' ? ' e ingresso del microfono' : ''}">Gain ed EQ</summary><div class="eqpop">${bars ? `<div class="eqpop-h"><b>${CH_LABEL[ch]}</b><button class="eqx" title="Chiudi">✕</button></div>` + (mutes && ch === 'voice' ? inmicHtml(pre) : '') : ''}<div class="knobs"></div><button class="def">★ Usa questi valori come predefiniti</button></div></details>`;
     const kn = d.querySelector('.knobs'); const ctl = {}; const eqc = d.querySelector('.eqc');
     const redrawEq = () => requestAnimationFrame(() => EQR.draw(eqc, ch, p));
     for (const K of KNOBS) {
@@ -1913,6 +1933,7 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
       kn.append(document.createElement('span'), w); ctl.hp = { cb };
     }
     eqc.addEventListener('click', () => { const de = d.querySelector('details.eq'); de.open = !de.open; });
+    if (bars) { const de = d.querySelector('details.eq'); de.addEventListener('toggle', () => placeEqPop(de)); d.querySelector('.eqx').addEventListener('click', () => { de.open = false; }); }
     const vol = d.querySelector('input.vol'), vv = d.querySelector('.h .v');
     vol.addEventListener('input', () => { p.vol = +vol.value; vv.textContent = p.vol + '%'; onChange(ch); });
     vol.addEventListener('dblclick', () => { vol.value = S.defaults[ch].vol; vol.dispatchEvent(new Event('input')); });
@@ -2464,7 +2485,7 @@ const SYNC_GROUPS = [
   ['testo', 'Testo del teleprompter'], ['audio', 'Sigla, sottofondi e capitoli (file audio)'], ['mixer', 'Mixer e livelli predefiniti'],
   ['video', 'Video: effetto, inquadratura, green screen, logo, sfondo'], ['layout', 'Disposizioni, vista, tasti, re-take'], ['plat', 'Canale e piattaforme']
 ];
-const SYNC_KEYS = { video: ['video', 'ov'], layout: ['layouts', 'layout', 'keys', 'mixStyle', 'orient', 'wideLay', 'retakeSec', 'preroll'], plat: ['plat', 'channel'] };
+const SYNC_KEYS = { video: ['video', 'ov'], layout: ['layouts', 'layout', 'keys', 'mixStyle', 'mixStyleWide', 'orient', 'wideLay', 'retakeSec', 'preroll'], plat: ['plat', 'channel'] };
 const SYNC = {
   cfg: null, timer: null,
   async load() {
@@ -2619,6 +2640,8 @@ const ORIENT = {
     } else { host.style.height = ''; if (changed) LAY.apply(S.settings.layout || 'classico'); }
     if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
     if (ED.open) { ED.resize(); ED.clampX(); ED.syncScroll(); }
+    if (changed && this.onWide) this.onWide();
+    if (!wide) this.adjust(false);
     requestAnimationFrame(() => this.fitVideo());
   },
   /* In orizzontale l'anteprima video si rimpicciolisce per stare nel suo riquadro (i comandi scorrono sotto) */
@@ -2628,10 +2651,12 @@ const ORIENT = {
     const cs = getComputedStyle(card), px = (k) => parseFloat(cs[k]) || 0;
     const inner = card.clientWidth - px('paddingLeft') - px('paddingRight');
     const h2 = card.querySelector('h2').offsetHeight;
-    const avail = card.clientHeight - px('paddingTop') - px('paddingBottom') - h2 - 16 - 64;
+    const avail = card.clientHeight - px('paddingTop') - px('paddingBottom') - h2 - 12;
     const w = Math.max(200, Math.min(inner, avail * 16 / 9));
     box.style.width = w + 'px'; box.style.alignSelf = 'center';
-  }
+  },
+  /* Vista orizzontale: i comandi video stanno in un pannello «⚙ Regola» sopra l'anteprima */
+  adjust(on) { const c = $('vcard'); if (!c) return; c.classList.toggle('adj', !!on); $('vAdjust').setAttribute('aria-pressed', String(!!on)); }
 };
 
 /* Disposizione dei pannelli */
@@ -2943,7 +2968,7 @@ function wire() {
   const startEdit = (mode) => {
     if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma');
     if (!CAM.ok) return toast('Webcam non attiva');
-    CAM.edit = mode; box.classList.add('editing'); hint.hidden = false;
+    ORIENT.adjust(false); CAM.edit = mode; box.classList.add('editing'); hint.hidden = false;
     hint.textContent = mode === 'area' ? 'Trascina il rettangolo da tenere (tutto il resto diventa nero) · Esc per annullare' : 'Clicca sul telo verde · Esc per annullare';
     if (mode === 'area' && vs.mask) { const m = vs.mask; Object.assign(areaBox.style, { left: m[0] * 100 + '%', top: m[1] * 100 + '%', width: (m[2] - m[0]) * 100 + '%', height: (m[3] - m[1]) * 100 + '%' }); areaBox.hidden = false; }
   };
@@ -2967,6 +2992,8 @@ function wire() {
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && CAM.edit) { drag = null; endEdit(); } });
   $('vArea').addEventListener('click', () => startEdit('area'));
+  $('vAdjust').addEventListener('click', () => ORIENT.adjust(!$('vcard').classList.contains('adj')));
+  $('vAdjClose').addEventListener('click', () => ORIENT.adjust(false));
   $('vPick').addEventListener('click', () => startEdit('pick'));
   $('vAreaReset').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma'); vs.mask = null; vs.zoom = false; saveSettings(); syncFrameUI(); });
   $('vZoom').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma'); vs.zoom = !vs.zoom; saveSettings(); syncFrameUI(); });
@@ -2982,7 +3009,7 @@ function wire() {
   $('vScene').addEventListener('click', async () => {
     if (isRec() || blocked()) return toast('Registra la scena vuota a registrazione ferma');
     if (!CAM.ok) return toast('Webcam non attiva');
-    const btn = $('vScene'); btn.disabled = true; CAM.edit = 'scene'; hint.hidden = false;
+    const btn = $('vScene'); btn.disabled = true; ORIENT.adjust(false); CAM.edit = 'scene'; hint.hidden = false;
     try {
       await CAM.unlockCamera();
       for (let k = 5; k > 0; k--) { hint.textContent = 'Esci dall\'inquadratura (porta via la sedia se vuoi farla sparire)… ' + k; await new Promise(r => setTimeout(r, 1000)); }
@@ -2998,10 +3025,15 @@ function wire() {
   $('vOn').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva o disattiva il video a registrazione ferma'); vs.on = !vs.on; saveSettings(); renderStatus(); });
   if (!V.codec) { $('vOn').disabled = true; $('vOn').title = 'Questo browser non sa registrare video: usa Chrome o Edge aggiornati'; vs.on = false; }
 
-  const mkLive = () => { meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = S.settings.mixStyle === 'compact' ? '⇄ Vista console' : '⇄ Vista compatta'; $('setMixStyle').value = S.settings.mixStyle || 'console'; };
-  mkLive();
-  $('mixStyleBtn').addEventListener('click', () => { S.settings.mixStyle = S.settings.mixStyle === 'compact' ? 'console' : 'compact'; saveSettings(); mkLive(); });
+  const STY = { console: 'console', compact: 'compatta', bars: 'a barre' };
+  const nextSty = () => { const list = ORIENT.wide ? ['bars', 'console', 'compact'] : ['console', 'compact']; const cur = mixStyleNow(); return list[(list.indexOf(cur) + 1) % list.length]; };
+  const mkLive = () => { meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = '⇄ Vista ' + STY[nextSty()]; $('setMixStyle').value = S.settings.mixStyle || 'console'; $('setMixStyleWide').value = S.settings.mixStyleWide || 'bars'; };
+  mkLive(); ORIENT.onWide = mkLive;
+  $('mixStyleBtn').addEventListener('click', () => { const n = nextSty(); if (ORIENT.wide) S.settings.mixStyleWide = n; else S.settings.mixStyle = n; saveSettings(); mkLive(); });
   $('setMixStyle').addEventListener('change', (e) => { S.settings.mixStyle = e.target.value; saveSettings(); mkLive(); });
+  $('setMixStyleWide').addEventListener('change', (e) => { S.settings.mixStyleWide = e.target.value; saveSettings(); mkLive(); });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#liveStrips details.eq')) document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(o => { o.open = false; }); });
+  addEventListener('resize', () => document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(placeEqPop));
 }
 
 /* Avvio */

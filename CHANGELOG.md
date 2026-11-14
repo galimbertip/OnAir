@@ -7,6 +7,12 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.4.0 — 14/11/2026
+- Mixer «a barre»: una riga per fonte (indicatore, fader, ↺, MUTE, ⚙) in due colonne, livello voce di lato; base in vista orizzontale. Con più fonti scorre in verticale.
+- ⚙ apre gain, EQ e ingresso microfono in un pannello sopra la riga.
+- Vista orizzontale: riquadro VIDEO con sola anteprima, comandi in «⚙ Regola» (si chiude da solo quando scegli area, colore o registri la scena vuota).
+- Stile del mixer separato per vista orizzontale e verticale (Impostazioni).
+
 ## V3.3.1 — 14/11/2026
 - Corretto: in vista orizzontale video, sottofondo e capitoli venivano tagliati in altezza.
 - Anteprima video adattata al riquadro (i comandi scorrono sotto); sottofondo e capitoli con più spazio e pulsanti sempre visibili.

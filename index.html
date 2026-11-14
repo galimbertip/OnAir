@@ -128,7 +128,7 @@ button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .strip.master .lufs output{font:700 26px var(--f-mono);font-variant-numeric:tabular-nums}
 .strip.master .lufs small{color:var(--dim);font-size:11px}
 .lv-scale{display:none}
-#liveStrips:not(.console){grid-template-columns:repeat(5,minmax(0,1fr))}
+#liveStrips:not(.console):not(.bars){grid-template-columns:repeat(5,minmax(0,1fr))}
 /* Vista console */
 .strips.console{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));align-items:stretch}
 .strips.console .strip{align-items:stretch}
@@ -189,9 +189,53 @@ body.wide .card .note{display:none}
 body.wide .card .list{max-height:none;flex:1 1 auto;min-height:36px}
 body.wide #cardIntro .fname{padding:7px 10px}
 body.wide .vcard{padding:12px}
-body.wide #panels>.vcard{display:flex;flex-direction:column;overflow:hidden}
+body.wide #panels>.vcard{display:flex;flex-direction:column;overflow:hidden;position:relative}
 body.wide .vcard>.vbox{flex:none}
-body.wide .vcard>.vctl{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
+body.wide .vcard>.vctl{display:none}
+body.wide .vcard.adj>.vctl{display:flex;position:absolute;left:8px;right:8px;top:48px;bottom:8px;z-index:15;overflow:auto;flex-direction:column;gap:8px;padding:10px 12px;background:rgba(8,12,22,.96);border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.vctl-h{display:none}
+body.wide .vctl-h{display:flex;align-items:center;gap:8px;font:700 11px var(--f-display);letter-spacing:.2em;color:var(--violet);padding:2px 0}
+.vctl-h .sp{flex:1}
+#vAdjust{display:none}
+body.wide #vAdjust{display:inline-flex}
+/* Mixer a barre: una riga per fonte */
+.strips.bars{grid-template-columns:repeat(2,minmax(0,1fr)) minmax(170px,.55fr);grid-auto-flow:row;gap:6px 10px;max-height:100%;overflow:auto}
+.strips.bars .strip{display:grid;grid-template-columns:minmax(84px,auto) minmax(0,1fr) auto auto;align-items:center;gap:4px 10px;padding:5px 10px;border-top-width:1px;border-left:3px solid var(--cc,var(--line))}
+.strips.bars .strip[data-ch=voice]{grid-column:1;grid-row:1} .strips.bars .strip[data-ch=intro]{grid-column:1;grid-row:2}
+.strips.bars .strip[data-ch=bg]{grid-column:2;grid-row:1} .strips.bars .strip[data-ch=cap]{grid-column:2;grid-row:2}
+.strips.bars .strip.master{grid-column:3;grid-row:1/3;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.strips.bars .h{display:flex;flex-direction:column;align-items:flex-start;gap:0;margin:0}
+.strips.bars .h b{font-size:11px}
+.strips.bars .h .v{font-size:10px}
+.strips.bars .eqc{display:none}
+.strips.bars .cs-main{display:flex;flex-direction:column;gap:3px;height:auto;min-width:0}
+.strips.bars .mcol{display:flex;flex-direction:row;align-items:center;gap:6px;height:auto;width:auto}
+.strips.bars .mcol .pk{order:2;font-size:9px;min-width:3.4em;text-align:right}
+.strips.bars .mtr{flex:1;width:auto;height:8px;min-width:0;border-radius:3px}
+.strips.bars .fad{display:block;margin:0}
+.strips.bars .fad .fl{display:none}
+.strips.bars input.vol{width:100%;margin:0;writing-mode:horizontal-tb;direction:ltr;height:18px}
+.strips.bars .cs-btns{display:flex;gap:4px}
+.strips.bars .cs-btns button{padding:4px 8px;min-height:0;font-size:11px}
+.strips.bars details.eq{border:0;padding:0;position:static}
+.strips.bars details.eq>summary{list-style:none;cursor:pointer;font-size:0;padding:4px 8px;border:1px solid var(--line2);border-radius:8px}
+.strips.bars details.eq>summary::-webkit-details-marker{display:none}
+.strips.bars details.eq>summary::before{content:'⚙';font-size:14px}
+.strips.bars details.eq[open]>summary{border-color:var(--cc,var(--cyan));color:var(--cc,var(--cyan))}
+.strips.bars .eqpop{z-index:60;background:var(--panel);border:1px solid var(--line2);border-top:3px solid var(--cc,var(--cyan));border-radius:10px;padding:10px 12px;overflow:auto;box-shadow:0 -10px 30px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:8px}
+.eqpop-h{display:flex;align-items:center;justify-content:space-between;font:700 11px var(--f-display);letter-spacing:.18em;color:var(--cc,var(--cyan))}
+.eqpop-h .eqx{padding:2px 8px;min-height:0}
+.strips.bars .eqpop .inmic{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
+.strips.bars .eqpop .inmic .fl{display:inline}
+.strips.bars .master .h{flex-direction:row;align-items:center;gap:6px}
+.strips.bars .master .lufs{display:flex;align-items:baseline;gap:6px;margin:0}
+.strips.bars .master .lufs .lv-n{font-size:22px}
+.strips.bars .master .cs-main{flex-direction:row;align-items:center;width:100%}
+.strips.bars .master .mcol{width:100%}
+.strips.bars input.vol{accent-color:var(--cc)}
+.strips.bars .master .mcol{flex:1}
+.strips.bars .master .lv-scale{display:none}
+.strips.bars .master .lv-hint{font-size:10px;margin:0;display:block!important}
 body.wide .mixer{padding:10px 12px;gap:6px}
 body.wide .mixer>.note{display:none}
 body.wide .strips.console .cs-main{height:clamp(56px,calc(100vh - 820px),118px)}
@@ -199,7 +243,7 @@ body.wide .strips.console .eqc{display:none}
 body.wide .strips.console .strip{position:relative;gap:6px;padding:8px 10px}
 body.wide .strips.console .inmic{flex-direction:row;align-items:center;gap:6px;width:100%}
 body.wide .strips.console .inmic .fl{display:inline;font-size:10px;white-space:nowrap}
-body.wide #liveStrips details.eq[open]{position:absolute;left:0;right:0;top:0;bottom:0;z-index:20;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;overflow:auto;box-shadow:0 -8px 24px rgba(0,0,0,.5)}
+body.wide #liveStrips.console details.eq[open]{position:absolute;left:0;right:0;top:0;bottom:0;z-index:20;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;overflow:auto;box-shadow:0 -8px 24px rgba(0,0,0,.5)}
 body.wide .card{display:flex;flex-direction:column}
 body.wide .card .list{min-height:36px;overflow:auto}
 body.wide #liveStrips.console{grid-template-columns:repeat(5,minmax(0,1fr))}
@@ -411,7 +455,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.3.1</span>
+    <span class="ver" id="bootVer">V3.4.0</span>
   </div>
 </div>
 
@@ -419,7 +463,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.3.1</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.4.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -469,9 +513,10 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </section>
 
   <section class="vcard pnl" id="vcard" data-panel="video">
-    <h2>VIDEO <span class="sp"></span><button class="switch" id="vOn" aria-pressed="true" title="Registra anche il video">Registra video</button></h2>
+    <h2>VIDEO <span class="sp"></span><button class="switch" id="vAdjust" aria-pressed="false" title="Contorni, inquadratura, green screen, sfondo e logo">⚙ Regola</button><button class="switch" id="vOn" aria-pressed="true" title="Registra anche il video">Registra video</button></h2>
     <div class="vbox" id="vBox"><canvas id="vCanvas" width="1280" height="720" style="display:none"></canvas><canvas id="vOut" width="1280" height="720"></canvas><div class="varea" id="vAreaBox" hidden></div><div class="vhint" id="vHint" hidden></div><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
     <div class="vctl">
+      <div class="vctl-h"><b>REGOLAZIONI VIDEO</b><span class="sp"></span><button id="vAdjClose" title="Chiudi e torna all'anteprima">✕ Chiudi</button></div>
     <div class="knobs">
       <label for="vThr">Contorni</label><input type="range" id="vThr" min="0.02" max="0.6" step="0.01"><output id="vThrO"></output>
       <label for="vGl">Disturbo</label><input type="range" id="vGl" min="0" max="1" step="0.01"><output id="vGlO"></output>
@@ -568,7 +613,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.3.1</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.4.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -718,7 +763,8 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <label for="setOrient">Orientamento</label><select id="setOrient"><option value="auto">Automatico (in base allo schermo)</option><option value="wide">Orizzontale: tutto in uno schermo (monitor 16:9)</option><option value="tall">Verticale: pannelli uno sotto l'altro (tablet, telefono)</option></select>
       <label for="setWideLay">Teleprompter nella vista orizzontale</label><select id="setWideLay"><option value="center">Al centro (webcam sopra il centro del monitor)</option><option value="left">A sinistra</option><option value="right">A destra</option></select>
     </div>
-    <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (barre orizzontali, comodo su tablet)</option></select></div>
+    <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (comodo su tablet)</option></select></div>
+    <div class="form"><label for="setMixStyleWide">Stile del mixer in vista orizzontale</label><select id="setMixStyleWide"><option value="bars">A barre (una riga per fonte, occupa poco)</option><option value="console">Console (fader verticali)</option><option value="compact">Compatto</option></select></div>
     <h3 style="font-size:13px">DISPOSIZIONE DEI PANNELLI</h3>
     <p class="note" style="margin:0">Scegli un set pronto o creane uno tuo: ordine (▲▼), larghezza e visibilità di ogni pannello. Metti il teleprompter dove guardi, cioè sotto la webcam.</p>
     <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layDel" class="danger">Elimina set</button></div>
