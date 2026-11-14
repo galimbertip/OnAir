@@ -7,6 +7,16 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.0.0 — 14/11/2026
+**Categorie audio a piacere** (Impostazioni → Categorie audio)
+- Categorie con nome, colore, comportamento (Singolo, In loop, Stacchetti), «ferma i loop», «capitoli YouTube», segnale nel teleprompter.
+- Motore audio, deck, mixer, montaggio, esportazione, capitoli, tasti, specchietto e disposizione generati dalle categorie. Sessioni con le proprie categorie (`sess.cats`); sessioni precedenti lette con le tre di base.
+- Categorie sincronizzate nel gruppo «audio».
+**Correzioni**
+- Segnali sulla riga di lettura all'avvio della registrazione (es. [SIGLA] prima del titolo) partono subito.
+- Tasti tenuti premuti non ripetono i comandi (la sigla ripartiva da capo); filtro sui doppioni ravvicinati.
+- Video: decodifica che riparte dal fotogramma chiave successivo se un pezzo è rovinato o manca, sia in anteprima sia nell'esportazione montata.
+
 ## V3.8.0 — 14/11/2026
 - Teleprompter: modi «Velocità fissa», «Scorre quando parlo» (rilevamento voce sulla banda 100–1000 Hz, ignora i clic) e «Segue le parole che leggo» (riconoscimento vocale del browser in italiano, allineamento sulle ultime parole dette; ripiega su «Quando parlo» se non disponibile). Tasto M.
 - [SOTTOFONDO] durante la sigla aspetta la fine della sigla.

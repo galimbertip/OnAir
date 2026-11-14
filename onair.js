@@ -3,9 +3,18 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.8.0' };
+const APP = { name: 'GPverse OnAir', version: '4.0.0' };
 
 const CHANGELOG = [
+  { v: '4.0.0', date: '14/11/2026', title: 'Categorie audio a piacere', items: [
+    'Non più solo Sigla, Sottofondo e Capitoli: in Impostazioni → Categorie audio crei tutte le categorie che vuoi (applausi, pubblicità, effetti, chiusura…), con nome, colore e comportamento.',
+    'Tre comportamenti: Singolo (un brano, suona una volta), In loop (lista che gira, pausa e ripresa), Stacchetti (lista da lanciare uno alla volta). Per ognuna scegli se «ferma i loop» mentre suona e se crea capitoli YouTube.',
+    'Ogni categoria ha il suo riquadro, la sua riga nel mixer, la sua traccia nel montaggio, il suo tasto (in Scorciatoie) e il suo segnale nel teleprompter: [APPLAUSI], [STOP APPLAUSI], [APPLAUSI 2].',
+    'Le categorie valgono per tutte le puntate e si sincronizzano tra i dispositivi; ogni sessione registrata ricorda le sue. Le sessioni di prima restano come sono.',
+    'Corretto: con «Parte con la registrazione» il segnale [SIGLA] scritto prima del titolo non partiva. Ora i segnali che si trovano sulla riga di lettura partono insieme alla registrazione.',
+    'Corretto: tenendo premuto il tasto della sigla un attimo di troppo la sigla ripartiva da capo («benvenuti a…» due volte). I tasti tenuti premuti non ripetono più i comandi (tranne le frecce del teleprompter).',
+    'Corretto: se un pezzo del video registrato è rovinato, l\'anteprima e l\'esportazione non si fermano più con «Decoding error»: saltano al fotogramma chiave successivo e vanno avanti.'
+  ] },
   { v: '3.8.0', date: '14/11/2026', title: 'Teleprompter che segue la voce e specchietto dei tasti', items: [
     'Teleprompter, tre modi di scorrimento (menu nella barra o tasto M): velocità fissa; «Scorre quando parlo» (si ferma nelle pause, ignora i tasti); «Segue le parole che leggo» (riconosce le parole e porta sulla riga di lettura quella che stai dicendo; se salti o improvvisi, aspetta).',
     'Le parole già lette diventano più chiare. Nei segnali [SIGLA] [CAPITOLO]… non cambia niente: partono quando la riga li raggiunge.',
@@ -184,18 +193,32 @@ const ROADMAP = [
 ];
 
 const $ = (id) => document.getElementById(id);
-const CHS = ['intro', 'bg', 'cap'];
-const ALL = ['voice', 'intro', 'bg', 'cap'];
-const CH_LABEL = { voice: 'VOCE', intro: 'SIGLA', bg: 'SOTTOFONDO', cap: 'CAPITOLI' };
+/* ------------------------------------------------------------ Categorie audio
+   Ogni categoria ha un comportamento: single (suona una volta), loop (lista che gira, si mette in pausa e riparte),
+   list (stacchetti da lanciare uno alla volta). «duck»: mentre suona zittisce i loop, che poi ripartono da dove erano. */
+const CAT_TYPES = { single: 'Singolo: un brano, suona una volta', loop: 'In loop: lista che gira, pausa e ripresa', list: 'Stacchetti: lista da lanciare uno alla volta' };
+const DEF_CATS = () => [
+  { id: 'intro', name: 'Sigla', type: 'single', color: '#ff2bd6', key: 's', duck: false, chap: false, cue: 'SIGLA' },
+  { id: 'bg', name: 'Sottofondo', type: 'loop', color: '#ffe600', key: 'b', duck: false, chap: false, cue: 'SOTTOFONDO' },
+  { id: 'cap', name: 'Capitoli', type: 'list', color: '#38ff7a', key: 'Enter', duck: true, chap: true, cue: 'CAPITOLO' }];
+const CATS = () => { let st; try { st = S.settings; } catch (e) { return DEF_CATS(); } return st.cats || (st.cats = DEF_CATS()); };
+const catsOf = (sess) => (sess && sess.cats) || DEF_CATS();
+const catOf = (id, cats) => (cats || CATS()).find(c => c.id === id);
+const cueWord = (c) => String(c.cue || c.name).trim().toUpperCase().replace(/\s+/g, ' ');
+const chsOf = (cats) => (cats || CATS()).map(c => c.id);
+const allOf = (cats) => ['voice', ...chsOf(cats)];
+const chLabel = (ch, cats) => ch === 'voice' ? 'VOCE' : ((catOf(ch, cats) || catOf(ch, DEF_CATS()) || { name: ch }).name || ch).toUpperCase();
+const chColor = (ch, cats) => ch === 'voice' ? '#00e5ff' : (catOf(ch, cats) || catOf(ch, DEF_CATS()) || { color: '#9aa7b8' }).color;
 const dbl = (db) => Math.pow(10, db / 20);
 
 /* ------------------------------------------------------------ Parametri mixer */
 const BASE_P = () => ({ gain: 0, low: 0, mid: 0, high: 0, vol: 100, comp: 0, hp: false });
 const FACTORY = { voice: { vol: 100, comp: 30, hp: true }, intro: { vol: 80 }, bg: { vol: 30 }, cap: { vol: 90 } };
-const fullP = (ch, p) => ({ ...BASE_P(), ...FACTORY[ch], ...(p || {}) });
-function normMix(m) {
+const TYPE_VOL = { single: 80, loop: 30, list: 90 };
+const fullP = (ch, p, cats) => ({ ...BASE_P(), ...(FACTORY[ch] || { vol: TYPE_VOL[(catOf(ch, cats) || {}).type] || 80 }), ...(p || {}) });
+function normMix(m, cats) {
   const o = {};
-  for (const ch of ALL) { const v = m && m[ch]; o[ch] = typeof v === 'number' ? fullP(ch, { vol: Math.min(150, v) }) : fullP(ch, v); }
+  for (const ch of allOf(cats)) { const v = m && m[ch]; o[ch] = typeof v === 'number' ? fullP(ch, { vol: Math.min(150, v) }, cats) : fullP(ch, v, cats); }
   return o;
 }
 
@@ -269,7 +292,7 @@ const ckey = (sid, i) => sid + ':' + String(i).padStart(7, '0');
 
 /* ------------------------------------------------------------------ Stato */
 const S = {
-  deck: { intro: null, bg: [], caps: [] },
+  deck: {},
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
@@ -283,7 +306,7 @@ async function saveSettings() { await DB.put('state', 'settings', S.settings); S
 const E = {
   ctx: null, sr: 48000, strips: {}, bus: {}, an: {}, master: null, micOk: false, micStream: null, micSrc: null, micAn: null, node: null,
   buffers: new Map(), voices: { intro: null, bg: null, cap: null },
-  bg: { idx: 0, pos: 0, status: 'stopped' }, capIdx: 0
+  loops: {}, next: {}
 };
 
 const WORKLET_SRC = `
@@ -310,10 +333,7 @@ async function initAudio() {
   await E.ctx.resume();
   E.sr = E.ctx.sampleRate;
   E.master = E.ctx.createGain(); E.master.connect(E.ctx.destination);
-  for (const ch of ALL) {
-    const an = E.ctx.createAnalyser(); an.fftSize = 2048; an.connect(E.master);
-    const st = new Strip(E.ctx, ch, an); E.strips[ch] = st; E.bus[ch] = st.input; E.an[ch] = an;
-  }
+  for (const ch of allOf()) ensureStrip(ch);
   E.bus.mon = E.strips.voice.input;
   E.micAn = E.ctx.createAnalyser(); E.micAn.fftSize = 2048;
   E.micGain = E.ctx.createGain(); E.micGain.gain.value = dbl(S.settings.micGain || 0); E.micGain.connect(E.micAn); LV.setup();
@@ -427,7 +447,14 @@ async function initMic() {
 }
 
 function setMicGain(db) { S.settings.micGain = db; saveSettings(); NS.setGate(); if (E.micGain) E.micGain.gain.setTargetAtTime(dbl(db), E.ctx.currentTime, 0.02); const o = $('dMicGainO'); if (o) o.textContent = '+' + db + ' dB'; const r = $('dMicGain'); if (r) r.value = db; const lr = $('liveStrips-voice-in'); if (lr) { lr.value = db; lr.nextElementSibling.textContent = '+' + db + ' dB'; } }
-function applyLevels() { if (!E.ctx) return; for (const ch of ALL) E.strips[ch].set(S.mix[ch], S.mutes[ch]); }
+function ensureStrip(ch) {
+  if (E.strips[ch] || !E.ctx) return;
+  const an = E.ctx.createAnalyser(); an.fftSize = 2048; an.connect(E.master);
+  const st = new Strip(E.ctx, ch, an); E.strips[ch] = st; E.bus[ch] = st.input; E.an[ch] = an;
+  if (!S.mix[ch]) S.mix[ch] = fullP(ch, S.defaults[ch]); if (!(ch in S.mutes)) S.mutes[ch] = false;
+  st.set(S.mix[ch], S.mutes[ch]);
+}
+function applyLevels() { if (!E.ctx) return; for (const ch of allOf()) { ensureStrip(ch); E.strips[ch].set(S.mix[ch], S.mutes[ch]); } }
 
 async function decodeFile(id, sr) {
   const rec = await DB.get('files', id); if (!rec) return null;
@@ -440,7 +467,15 @@ async function loadBuffer(id) {
   try { const b = await decodeFile(id); if (b) E.buffers.set(id, b); return b; }
   catch (e) { toast('Non riesco a leggere ' + (S.names.get(id) || 'un file audio')); return null; }
 }
-async function preloadDeck() { const ids = [S.deck.intro, ...S.deck.bg, ...S.deck.caps].filter(Boolean); for (const id of ids) await loadBuffer(id); renderDeck(); }
+async function preloadDeck() { for (const id of deckIds()) await loadBuffer(id); renderDeck(); }
+/* Contenuto del deck per categoria: single → un file (o null), loop/list → elenco */
+function normDeck() {
+  if (S.deck.caps && !S.deck.cap) S.deck.cap = S.deck.caps; delete S.deck.caps;
+  for (const c of CATS()) { const v = S.deck[c.id]; S.deck[c.id] = c.type === 'single' ? (Array.isArray(v) ? (v[0] || null) : (v || null)) : (Array.isArray(v) ? v : (v ? [v] : [])); }
+}
+const dk = (id) => { const c = catOf(id), v = S.deck[id]; if (c && c.type === 'single') return v || null; return Array.isArray(v) ? v : (S.deck[id] = v ? [v] : []); };
+const dkList = (id) => { const v = dk(id); return Array.isArray(v) ? v : (v ? [v] : []); };
+const deckIds = () => [...new Set(CATS().flatMap(c => dkList(c.id)).filter(Boolean))];
 
 /* ---------------------------------------------------------------- Registratore */
 const R = {
@@ -542,50 +577,68 @@ function onVoiceEnded(v) {
   const endCtx = v.startCtx + (v.dur - v.offset);
   if (v.seg && v.seg.tEnd == null) v.seg.tEnd = tlAt(endCtx);
   E.voices[v.ch] = null;
-  if (v.ch === 'bg') { E.bg.idx = (E.bg.idx + 1) % Math.max(1, S.deck.bg.length); E.bg.pos = 0; bgPlay(); }
-  if (v.ch === 'cap' && E.bg.status === 'held') bgPlay();
-  if (v.ch === 'intro') TP.onIntroEnd();
+  const c = catOf(v.ch);
+  if (c && c.type === 'loop') { const L = loopSt(v.ch); L.idx = (L.idx + 1) % Math.max(1, dkList(v.ch).length); L.pos = 0; loopPlay(v.ch); }
+  else if (c) afterEnd(v.ch);
   renderDeck();
 }
 
-/* Sigla */
-function introPlay() { if (blocked() || !S.deck.intro) return; stopVoice('intro'); startVoice('intro', S.deck.intro, 0, now()); renderDeck(); }
-function introStop() { if (blocked()) return; const was = !!E.voices.intro; stopVoice('intro'); if (was) TP.onIntroEnd(); renderDeck(); }
-
-/* Sottofondo */
-function bgPlay() {
-  if (!S.deck.bg.length) { E.bg.status = 'stopped'; return; }
-  if (E.bg.idx >= S.deck.bg.length) { E.bg.idx = 0; E.bg.pos = 0; }
-  const v = startVoice('bg', S.deck.bg[E.bg.idx], E.bg.pos, now(), { bgIdx: E.bg.idx });
-  E.bg.status = v ? 'playing' : 'paused';
+/* Comandi generici per categoria */
+const loopSt = (id) => E.loops[id] || (E.loops[id] = { idx: 0, pos: 0, status: 'stopped' });
+const catName = (id) => (catOf(id) || { name: id }).name;
+const ducking = () => Object.values(E.voices).some(v => v && (catOf(v.ch) || {}).duck);
+const singlePlaying = () => CATS().some(c => c.type === 'single' && E.voices[c.id]);
+function holdLoops() {
+  const held = {};
+  for (const c of CATS()) if (c.type === 'loop') {
+    const L = loopSt(c.id); if (L.status === 'playing') { L.pos = stopVoice(c.id) || 0; L.status = 'held'; }
+    if (L.status === 'held') held[c.id] = { idx: L.idx, pos: L.pos };
+  }
+  return held;
 }
-function bgToggle() {
-  if (blocked() || !S.deck.bg.length) return;
-  if (E.bg.status === 'playing') { E.bg.pos = stopVoice('bg') || 0; E.bg.status = 'paused'; }
-  else if (E.bg.status === 'held') toast('Il sottofondo riparte da solo alla fine del capitolo');
-  else bgPlay();
+function releaseLoops() { if (ducking()) return; for (const c of CATS()) if (c.type === 'loop' && loopSt(c.id).status === 'held') loopPlay(c.id); }
+function afterEnd(id) { const c = catOf(id); if (!c) return; if (c.duck) releaseLoops(); if (c.type === 'single') TP.onSingleEnd(id); }
+function singlePlay(id) {
+  const f = dk(id), c = catOf(id); if (blocked() || !f || !c) return;
+  stopVoice(id); const held = c.duck ? holdLoops() : null;
+  startVoice(id, f, 0, now(), held ? { held } : {}); renderDeck();
+}
+function singleStop(id) { if (blocked()) return; const was = !!E.voices[id]; stopVoice(id); if (was) afterEnd(id); renderDeck(); }
+function loopPlay(id) {
+  const L = loopSt(id), arr = dkList(id);
+  if (!arr.length) { L.status = 'stopped'; return; }
+  if (L.idx >= arr.length) { L.idx = 0; L.pos = 0; }
+  const v = startVoice(id, arr[L.idx], L.pos, now(), { bgIdx: L.idx });
+  L.status = v ? 'playing' : 'paused';
+}
+function loopToggle(id) {
+  const L = loopSt(id); if (blocked() || !dkList(id).length) return;
+  if (L.status === 'playing') { L.pos = stopVoice(id) || 0; L.status = 'paused'; }
+  else if (L.status === 'held') toast(catName(id) + ': riparte da solo quando finisce lo stacchetto');
+  else loopPlay(id);
   renderDeck();
 }
-function bgJump(i) {
-  if (blocked() || !S.deck.bg.length) return;
-  const n = S.deck.bg.length; i = ((i % n) + n) % n;
-  const wasPlaying = E.bg.status === 'playing';
-  if (wasPlaying) stopVoice('bg');
-  E.bg.idx = i; E.bg.pos = 0;
-  if (wasPlaying) bgPlay(); else if (E.bg.status !== 'held') E.bg.status = 'paused';
+function loopJump(id, i) {
+  const arr = dkList(id); if (blocked() || !arr.length) return;
+  const L = loopSt(id), n = arr.length; i = ((i % n) + n) % n;
+  const was = L.status === 'playing'; if (was) stopVoice(id);
+  L.idx = i; L.pos = 0;
+  if (was) loopPlay(id); else if (L.status !== 'held') L.status = 'paused';
   renderDeck();
 }
-
-/* Capitoli */
-function capPlay(i) {
-  if (blocked() || i < 0 || i >= S.deck.caps.length) return;
-  if (E.voices.cap) stopVoice('cap');
-  if (E.bg.status === 'playing') { E.bg.pos = stopVoice('bg') || 0; E.bg.status = 'held'; }
-  const held = E.bg.status === 'held' ? { idx: E.bg.idx, pos: E.bg.pos } : null;
-  startVoice('cap', S.deck.caps[i], 0, now(), { capIdx: i, heldBg: held });
-  E.capIdx = i + 1; renderDeck();
+function listPlay(id, i) {
+  const arr = dkList(id), c = catOf(id); if (blocked() || !c || i < 0 || i >= arr.length) return;
+  if (E.voices[id]) stopVoice(id);
+  const held = c.duck ? holdLoops() : null;
+  startVoice(id, arr[i], 0, now(), { capIdx: i, ...(held ? { held } : {}) });
+  E.next[id] = i + 1; renderDeck();
 }
-function capStop() { if (blocked() || !E.voices.cap) return; stopVoice('cap'); if (E.bg.status === 'held') bgPlay(); renderDeck(); }
+function listStop(id) { if (blocked() || !E.voices[id]) return; stopVoice(id); afterEnd(id); renderDeck(); }
+/* Il tasto della categoria: sigla → play, loop → play/pausa, stacchetti → lancia il prossimo */
+function catAction(id) { const c = catOf(id); if (!c) return; if (c.type === 'single') singlePlay(id); else if (c.type === 'loop') loopToggle(id); else listPlay(id, E.next[id] || 0); }
+function catStop(id) { const c = catOf(id); if (!c) return; if (c.type === 'single') singleStop(id); else if (c.type === 'list') listStop(id); else if (loopSt(id).status === 'playing') loopToggle(id); }
+const firstList = () => CATS().find(c => c.type === 'list');
+const firstSingle = () => CATS().find(c => c.type === 'single');
 
 /* ------------------------------------------------------------ Registrazione */
 function fmt(t, tenths = true) {
@@ -602,15 +655,15 @@ async function recStart() {
   if (!E.micOk) { toast('Microfono non disponibile: controlla il permesso nel browser o scegline un altro in Impostazioni'); return; }
   const id = 's' + Date.now();
   const lat = (E.ctx.outputLatency || 0) + (E.ctx.baseLatency || 0) + 0.01;
-  const names = {}; for (const fid of [S.deck.intro, ...S.deck.bg, ...S.deck.caps].filter(Boolean)) names[fid] = S.names.get(fid);
+  const names = {}; for (const fid of deckIds()) names[fid] = S.names.get(fid);
   R.session = { id, name: sessionName(), created: Date.now(), sr: E.sr, len: 0, segs: [], retakes: 0, status: 'rec', latency: lat, names,
-    mix: JSON.parse(JSON.stringify(S.mix)), appVersion: APP.version, capIdx0: E.capIdx };
+    mix: JSON.parse(JSON.stringify(S.mix)), appVersion: APP.version, cats: JSON.parse(JSON.stringify(CATS())), next0: { ...E.next } };
   R.CH = E.sr; R.chunks = []; R.cur = new Int16Array(R.CH); R.curFill = 0; R.cIdx = 0; R.len = 0;
   R.fade = Math.round(0.01 * E.sr); R.fadeIn = 0;
   const t = now() + 0.05;
   R.Tanchor = 0; R.ctxAnchor = t; R.fromFrame = Math.round(t * E.sr); R.untilFrame = Infinity;
   R.state = 'rec';
-  for (const ch of CHS) { const v = E.voices[ch]; if (v) v.seg = addSeg({ ch, fileId: v.fileId, tStart: 0, off: posOf(v, t), tEnd: null, ...v.extra }); }
+  for (const ch of chsOf()) { const v = E.voices[ch]; if (v) v.seg = addSeg({ ch, fileId: v.fileId, tStart: 0, off: posOf(v, t), tEnd: null, ...v.extra }); }
   R.tpLog = []; TP.onRecStart();
   if (S.settings.video.on && S.settings.camId !== 'none' && V.codec) {
     if (CAM.ok) V.start(R.session); else toast('Webcam non attiva: registro solo l\'audio');
@@ -624,7 +677,7 @@ async function enterHold(mode) {
   const t = now();
   R.untilFrame = Math.round(t * E.sr);
   const T = tlAt(t);
-  for (const ch of CHS) if (E.voices[ch]) stopVoice(ch, t, true);
+  for (const ch of chsOf()) if (E.voices[ch]) stopVoice(ch, t, true);
   TP.onHold();
   R.state = 'hold'; R.holdMode = mode; renderAll();
   await Promise.all([waitFlush(Math.round(T * E.sr)), V.hold()]);
@@ -655,12 +708,16 @@ async function commitHold() {
   // Ricostruisce lo stato del deck a quell'istante
   const last = (ch) => { let r = null; for (const s of kept) if (s.ch === ch && (!r || s.tStart >= r.tStart)) r = s; return r; };
   const openOf = (ch) => open.find(s => s.ch === ch);
-  const lc = last('cap'); E.capIdx = lc ? lc.capIdx + 1 : (R.session.capIdx0 || 0);
-  const ob = openOf('bg'), oc = openOf('cap'), lb = last('bg');
-  if (ob) E.bg = { idx: ob.bgIdx, pos: ob.off + (Tq - ob.tStart), status: 'playing' };
-  else if (oc && oc.heldBg) E.bg = { idx: oc.heldBg.idx, pos: oc.heldBg.pos, status: 'held' };
-  else if (lb) E.bg = { idx: lb.bgIdx, pos: lb.off + (lb.tEnd - lb.tStart), status: 'paused' };
-  else if (E.bg.status === 'playing' || E.bg.status === 'held') E.bg.status = 'paused';
+  for (const c of CATS()) {
+    if (c.type === 'list') { const lc = last(c.id); E.next[c.id] = lc ? lc.capIdx + 1 : ((R.session.next0 || {})[c.id] || 0); }
+    if (c.type !== 'loop') continue;
+    const L = loopSt(c.id), ob = openOf(c.id), lb = last(c.id);
+    const hs = open.find(s2 => s2.held && s2.held[c.id]), held = hs ? hs.held[c.id] : null;
+    if (ob) Object.assign(L, { idx: ob.bgIdx, pos: ob.off + (Tq - ob.tStart), status: 'playing' });
+    else if (held) Object.assign(L, { idx: held.idx, pos: held.pos, status: 'held' });
+    else if (lb) Object.assign(L, { idx: lb.bgIdx, pos: lb.off + (lb.tEnd - lb.tStart), status: 'paused' });
+    else if (L.status === 'playing' || L.status === 'held') L.status = 'paused';
+  }
 
   // Pre-ascolto: voce e musica degli ultimi secondi, poi si riparte
   const P = Math.min(S.settings.preroll, Tq);
@@ -682,7 +739,7 @@ async function commitHold() {
   }
   for (const sg of open) {
     const a = Math.max(sg.tStart, w0);
-    const extra = {}; for (const k of ['bgIdx', 'capIdx', 'heldBg']) if (k in sg) extra[k] = sg[k];
+    const extra = {}; for (const k of ['bgIdx', 'capIdx', 'held']) if (k in sg) extra[k] = sg[k];
     const v = startVoice(sg.ch, sg.fileId, sg.off + (a - sg.tStart), base + (a - w0), extra, true);
     if (v) v.seg = addSeg({ ch: sg.ch, fileId: sg.fileId, tStart: Tq, off: sg.off + (Tq - sg.tStart), tEnd: null, cont: true, ...extra });
   }
@@ -695,7 +752,7 @@ async function recFinish() {
   stopListen();
   if (R.state === 'rec') {
     const t = now(); R.untilFrame = Math.round(t * E.sr);
-    for (const ch of CHS) if (E.voices[ch]) stopVoice(ch, t);
+    for (const ch of chsOf()) if (E.voices[ch]) stopVoice(ch, t);
     R.state = 'hold'; await waitFlush(Math.round(tlAt(t) * E.sr));
   } else if (R.state !== 'hold') return;
   await V.stop();
@@ -705,7 +762,7 @@ async function recFinish() {
   await persistSession();
   const sid = R.session.id;
   R.session = null; R.state = 'idle'; R.fromFrame = Infinity;
-  E.bg = { idx: 0, pos: 0, status: 'stopped' }; E.capIdx = 0; // la prossima puntata riparte da capo
+  E.loops = {}; E.next = {}; // la prossima puntata riparte da capo
   TP.onFinish();
   $('holdModal').hidden = true;
   renderAll();
@@ -899,11 +956,11 @@ async function renderMix(sess, mix, sink, onProg, phase, outSr) {
     const s0 = Math.max(0, a - PAD), b = Math.min(total, a + W), len = b - s0;
     const o0 = os(s0), oa = os(a), ob = os(b);
     const oc = new OfflineAudioContext(2, ob - o0, outSr);
-    const st = {}; for (const ch of ALL) { st[ch] = new Strip(oc, ch, oc.destination); st[ch].set(mix[ch], false); }
+    const st = {}; for (const ch of allOf(catsOf(sess))) { st[ch] = new Strip(oc, ch, oc.destination); st[ch].set(mix[ch] || fullP(ch, null, catsOf(sess)), false); }
     const v = await readVoiceOut(sess, s0, b, cache);
     const vb = oc.createBuffer(1, len, sr); vb.copyToChannel(v, 0);
     const vs = oc.createBufferSource(); vs.buffer = vb; vs.connect(st.voice.input); vs.start(0);
-    for (const s of prep.segs) schedSeg(oc, prep, s, s0, b, st[s.ch].input, 0);
+    for (const s of prep.segs) if (st[s.ch]) schedSeg(oc, prep, s, s0, b, st[s.ch].input, 0);
     const out = await oc.startRendering();
     sink(out.getChannelData(0).subarray(oa - o0), out.getChannelData(1).subarray(oa - o0));
     onProg(phase, b / total);
@@ -924,21 +981,33 @@ class VidPlayer {
     if (!this.idx.length) { this.msg('In questa sessione non c\'è video registrato'); return; }
     const us = from * 1e6; let si = 0;
     for (let j = 0; j < this.idx.length; j++) { if (this.idx[j].t0 > us) break; if (this.idx[j].k != null && this.idx[j].k <= us) si = j; }
-    this.shown = false; this.err = null;
-    this.dec = new VideoDecoder({ output: (f) => { if (gen !== this.gen) { f.close(); return; } this.q.push(f); }, error: (e) => { console.warn('decoder', e); this.err = e; this.msg('Il browser non riesce a leggere questo video (' + e.message + ')'); } });
+    this.shown = false; this.err = null; this.fails = 0;
+    this.mkDec(gen);
     let cfg = { codec: this.v.codec, codedWidth: this.v.w, codedHeight: this.v.h, hardwareAcceleration: 'prefer-software' };
     try { const sup = await VideoDecoder.isConfigSupported(cfg); if (!sup.supported) { cfg = { codec: this.v.codec, codedWidth: this.v.w, codedHeight: this.v.h }; } } catch (e) { cfg = { codec: this.v.codec, codedWidth: this.v.w, codedHeight: this.v.h }; }
     if (gen !== this.gen) return;
-    this.dec.configure(cfg);
+    this.cfg = cfg; this.dec.configure(cfg);
     this.next = si; this.started = false; this.pump(gen);
+  }
+  /* Se un pezzo di video è rovinato o manca, non si ferma tutto: si riparte dal fotogramma chiave successivo */
+  mkDec(gen) {
+    this.dec = new VideoDecoder({
+      output: (f) => { if (gen !== this.gen) { f.close(); return; } this.q.push(f); },
+      error: (e) => {
+        console.warn('decoder', e); if (gen !== this.gen) return;
+        if (++this.fails > 30) { this.err = e; this.msg('Il browser non riesce a leggere questo video (' + e.message + ')'); return; }
+        try { this.dec.close(); } catch (e2) {}
+        this.mkDec(gen); if (this.cfg) this.dec.configure(this.cfg); this.started = false; this.busy = false; this.pump(gen);
+      }
+    });
   }
   async pump(gen) {
     if (this.busy || !this.dec) return; this.busy = true;
     try {
       while (gen === this.gen && this.next < this.idx.length && this.q.length < 24 && this.dec.decodeQueueSize < 12) {
         const g = await DB.get('chunks', vkey(this.sess.id, this.idx[this.next].i)); this.next++;
-        if (!g || gen !== this.gen) continue;
-        for (const c of g.ch) { if (!this.started) { if (!c.key) continue; this.started = true; } this.dec.decode(new EncodedVideoChunk({ type: c.key ? 'key' : 'delta', timestamp: c.ts, data: c.d })); }
+        if (!g) { this.started = false; continue; } if (gen !== this.gen) continue;
+        for (const c of g.ch) { if (this.dec.state !== 'configured') break; if (!this.started) { if (!c.key) continue; this.started = true; } this.dec.decode(new EncodedVideoChunk({ type: c.key ? 'key' : 'delta', timestamp: c.ts, data: c.d })); }
       }
     } catch (e) { console.warn(e); }
     this.busy = false;
@@ -962,7 +1031,7 @@ class Preview {
   constructor(sess, onTick) {
     this.sess = sess; this.onTick = onTick; this.total = sessDur(sess); this.pos = 0; this.playing = false; this.gen = 0;
     this.out = E.ctx.createGain(); this.out.connect(E.ctx.destination);
-    this.st = {}; for (const ch of ALL) { this.st[ch] = new Strip(E.ctx, ch, this.out); this.st[ch].set(sess.mix[ch], false); }
+    this.st = {}; for (const ch of allOf(catsOf(sess))) { this.st[ch] = new Strip(E.ctx, ch, this.out); this.st[ch].set(sess.mix[ch] || fullP(ch, null, catsOf(sess)), false); }
     this.srcs = []; this.cache = new Map();
     this.vid = null;
   }
@@ -974,7 +1043,7 @@ class Preview {
     from = Math.max(0, Math.min(this.total - 0.1, from));
     const c = E.ctx; this.t0 = c.currentTime + 0.1; this.from = from; this.playing = true;
     const a = Math.round(from * this.prep.srT);
-    for (const s of this.prep.segs) { const src = schedSeg(c, this.prep, s, a, sessLenS(this.sess), this.st[s.ch].input, this.t0); if (src) this.srcs.push(src); }
+    for (const s of this.prep.segs) { if (!this.st[s.ch]) continue; const src = schedSeg(c, this.prep, s, a, sessLenS(this.sess), this.st[s.ch].input, this.t0); if (src) this.srcs.push(src); }
     this.vNext = a; this.pump(gen); this.timer = setInterval(() => this.pump(gen), 300);
     if (this.vid) this.vid.show(from);
   }
@@ -1867,19 +1936,23 @@ async function exportVideo(sess, opts, onProg) {
       mx.addVideoChunkRaw(d, c.type, c.timestamp, firstOut ? (m && m.decoderConfig ? m : (v.meta || undefined)) : undefined); firstOut = false;
     }, error: (e) => { verr = e; } });
     enc.configure({ codec: v.codec, width: v.w, height: v.h, bitrate: v.h >= 1080 ? 5000000 : 2500000, framerate: v.fps || 30 });
-    const dec = new VideoDecoder({ output: (f) => {
+    const onFrame = (f) => {
       const t = f.timestamp / 1e6; let pi = -1;
       for (let k = 0; k < map.length; k++) if (t >= map[k].s - 1e-4 && t < map[k].s + map[k].d) { pi = k; break; }
       if (pi < 0) { f.close(); return; }
       const ts = Math.round((map[pi].o + (t - map[pi].s)) * 1e6); if (ts <= lastOutTs || ts >= endUs) { f.close(); return; }
       const nf = new VideoFrame(f, { timestamp: ts, duration: 33333 }); f.close();
       enc.encode(nf, { keyFrame: nOut % 60 === 0 || pi !== lastPiece }); nf.close(); nOut++; lastPiece = pi; lastOutTs = ts;
-    }, error: (e) => { verr = e; } });
-    dec.configure({ codec: v.codec, codedWidth: v.w, codedHeight: v.h });
+    };
+    // un pezzo rovinato non blocca l'esportazione: si riparte dal fotogramma chiave successivo
+    let dec, dbad = false, dfails = 0;
+    const mkDec = () => { dec = new VideoDecoder({ output: onFrame, error: (e) => { console.warn('decoder', e); dbad = true; if (++dfails > 30) verr = e; } }); dec.configure({ codec: v.codec, codedWidth: v.w, codedHeight: v.h }); };
+    mkDec();
     let started = false;
     for (let i = 0; i < (v.nGroups || 0); i++) {
-      const g = await DB.get('chunks', vkey(sess.id, i)); if (!g) continue;
+      const g = await DB.get('chunks', vkey(sess.id, i)); if (!g) { started = false; continue; }
       for (const c of g.ch) {
+        if (dbad) { try { dec.close(); } catch (e) {} dbad = false; mkDec(); started = false; }
         if (!started) { if (!c.key) continue; started = true; }
         while (dec.decodeQueueSize > 8 || enc.encodeQueueSize > 8) await new Promise(r => setTimeout(r, 4));
         if (verr) throw verr;
@@ -1887,7 +1960,7 @@ async function exportVideo(sess, opts, onProg) {
       }
       onProg(opts.normalize ? 1 : 0, 0.9 + 0.1 * (i + 1) / v.nGroups);
     }
-    await dec.flush(); await enc.flush(); dec.close(); enc.close(); if (verr) throw verr;
+    try { await dec.flush(); } catch (e) {} await enc.flush(); try { dec.close(); } catch (e) {} enc.close(); if (verr) throw verr;
     while (ai < achunks.length) addA();
     mx.finalize();
     return { blob: new Blob([target.buffer], { type: 'video/webm' }), lufs };
@@ -1975,9 +2048,14 @@ const VF = {
     this.pos = best + 1; this.target = W[best].el; this.mark(this.pos);
   }
 };
-const CUE_RE = /\[(SIGLA|STOP SIGLA|SOTTOFONDO|STOP SOTTOFONDO|CAPITOLO(?:\s+(\d{1,2}))?|STOP CAPITOLO|PAUSA|ISCRIVITI)\]/gi;
+/* Segnali nel testo: [NOME] e [STOP NOME] per ogni categoria (con il numero per gli stacchetti: [CAPITOLO 3]), più [PAUSA] e [ISCRIVITI] */
+function cueRe() {
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
+  const words = CATS().map(cueWord).filter(Boolean).sort((a, b) => b.length - a.length).map(esc).join('|');
+  return new RegExp('\\[((?:STOP\\s+)?(?:' + (words || 'NESSUNO') + ')|PAUSA|ISCRIVITI)(?:\\s+(\\d{1,2}))?\\]', 'giu');
+}
 const TP = {
-  text: '', running: false, speed: 6, size: 42, mirror: false, auto: true, visible: true, startMode: 'intro', mode: 'fixed', bgAfterIntro: false,
+  text: '', running: false, speed: 6, size: 42, mirror: false, auto: true, visible: true, startMode: 'intro', mode: 'fixed', pendingLoops: new Set(),
   wasRunning: false, acc: 0, expect: 0, lastT: 0, lastLog: 0, cues: [],
   view: null, el: null,
   async load() {
@@ -1990,11 +2068,13 @@ const TP = {
     const paras = this.text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
     // ogni parola in uno <span class="w">: serve al teleprompter che segue la voce
     const plain = (t) => esc(t).replace(/[^\s]+/g, (w) => `<span class="w">${w}</span>`).replace(/\n/g, '<br>');
+    const re = cueRe();
     this.el.innerHTML = paras.map(p => {
       let out = '', i = 0;
-      for (const m of p.matchAll(CUE_RE)) {
-        out += plain(p.slice(i, m.index)); const kind = m[1], n = m[2], k = kind.toUpperCase().replace(/\s+\d+$/, '');
-        out += `<span class="cue" data-cue="${k}" data-n="${n || ''}">${esc(kind.toUpperCase())}</span>`; i = m.index + m[0].length;
+      for (const m of p.matchAll(re)) {
+        out += plain(p.slice(i, m.index)); const kind = m[1].replace(/\s+/g, ' '), n = m[2], k = kind.toUpperCase();
+        const cc = catOf((CATS().find(c => cueWord(c) === k.replace(/^STOP /, '')) || {}).id);
+        out += `<span class="cue" data-cue="${esc(k)}" data-n="${n || ''}"${cc ? ` style="--cc:${cc.color}"` : ''}>${esc(k + (n ? ' ' + n : ''))}</span>`; i = m.index + m[0].length;
       }
       return '<p>' + out + plain(p.slice(i)) + '</p>';
     }).join('');
@@ -2056,36 +2136,39 @@ const TP = {
   fire(c) {
     c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 900);
     const k = c.dataset.cue, n = +c.dataset.n;
-    if (k === 'SIGLA') introPlay();
-    else if (k === 'STOP SIGLA') introStop();
-    else if (k === 'SOTTOFONDO') {
-      if (E.voices.intro) { this.bgAfterIntro = true; toast('Il sottofondo parte quando la sigla è finita'); }
-      else if (E.bg.status === 'paused' || E.bg.status === 'stopped') bgToggle();
-    }
-    else if (k === 'STOP SOTTOFONDO') { if (E.bg.status === 'playing') bgToggle(); }
-    else if (k === 'CAPITOLO') capPlay(n ? n - 1 : E.capIdx);
-    else if (k === 'STOP CAPITOLO') capStop();
-    else if (k === 'ISCRIVITI') SUB.start();
+    if (k === 'ISCRIVITI') SUB.start();
     else if (k === 'PAUSA') { this.running = false; this.layout(); toast('Testo fermo: premi P per farlo ripartire'); }
+    else {
+      const stop = /^STOP /.test(k), cat = CATS().find(x => cueWord(x) === k.replace(/^STOP /, '')); if (!cat) return;
+      if (stop) catStop(cat.id);
+      else if (cat.type === 'single') singlePlay(cat.id);
+      else if (cat.type === 'list') listPlay(cat.id, n ? n - 1 : (E.next[cat.id] || 0));
+      else if (singlePlaying()) { this.pendingLoops.add(cat.id); toast(cat.name + ': parte quando la sigla è finita'); }
+      else if (['paused', 'stopped'].includes(loopSt(cat.id).status)) loopToggle(cat.id);
+    }
   },
   onScroll() { if (Math.abs(this.view.scrollTop - this.expect) > 2) { this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); } },
   onRecStart() {
     this.syncFired();
-    const go = this.startMode === 'rec' || (this.startMode === 'intro' && !S.deck.intro);
+    // segnali appena sopra la riga di lettura (es. [SIGLA] prima del titolo): sono «adesso», quindi partono con la registrazione
+    if (this.auto) { const ly = this.lineY(), lh = this.size * 1.45; for (const c of this.cues) { const y = this.cueY(c); if (y <= ly + lh * 0.6 && y > ly - lh * 1.9) { c.dataset.fired = '1'; this.fire(c); } } }
+    const fs = firstSingle(), go = this.startMode === 'rec' || (this.startMode === 'intro' && !(fs && dk(fs.id)));
     if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); }
     this.layout();
   },
-  onIntroEnd() {
-    if (this.bgAfterIntro) { this.bgAfterIntro = false; if (isRec() && (E.bg.status === 'paused' || E.bg.status === 'stopped')) bgToggle(); }
+  onSingleEnd(id) {
+    // i loop chiesti durante la sigla partono quando nessuna sigla suona più
+    if (this.pendingLoops.size && !singlePlaying()) { const l = [...this.pendingLoops]; this.pendingLoops.clear(); if (isRec()) for (const c of l) if (['paused', 'stopped'].includes(loopSt(c).status)) loopToggle(c); }
+    const fs = firstSingle(); if (!fs || fs.id !== id) return;
     if (this.startMode === 'intro' && isRec() && !this.running && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.layout(); } },
-  onHold() { this.wasRunning = this.running; this.running = false; this.bgAfterIntro = false; this.layout(); },
+  onHold() { this.wasRunning = this.running; this.running = false; this.pendingLoops.clear(); this.layout(); },
   onResume(Tq, w0) {
     R.tpLog = R.tpLog.filter(e => e.t <= Tq + 0.01);
     let y = null, run = null; for (const e of R.tpLog) { if (e.t <= w0 + 0.01) y = e.y; run = e.run; }
     if (y != null) this.setTop(y);
     this.running = run != null ? run : this.wasRunning; this.lastT = performance.now(); this.layout();
   },
-  onFinish() { this.running = false; this.bgAfterIntro = false; VF.stop(); this.layout(); HELP.onFinish(); },
+  onFinish() { this.running = false; this.pendingLoops.clear(); VF.stop(); this.layout(); HELP.onFinish(); },
   edit(on) {
     $('ptEditBox').hidden = !on; $('ptView').hidden = on;
     if (on) { $('ptArea').value = this.text; $('ptArea').focus(); }
@@ -2123,35 +2206,84 @@ function li(cls, num, text, onClick, ops) {
 function emptyLi(text) { const el = document.createElement('li'); el.className = 'empty'; el.textContent = text; return el; }
 function moveIn(arr, i, d) { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; }
 
+/* Riquadri del deck: uno per categoria, costruiti dalle categorie */
+const LEGACY_FILE = { intro: 'fileIntro', bg: 'fileBg', cap: 'fileCap' };
+const DECKUI = {
+  cards: {},
+  build() {
+    const host = $('panels'); if (!host) return;
+    host.querySelectorAll('.deckc').forEach(el => el.remove()); this.cards = {};
+    const mixer = host.querySelector('[data-panel="mixer"]'), fl = firstList();
+    for (const c of CATS()) {
+      const el = document.createElement('section'); el.className = 'card pnl deckc'; el.dataset.panel = c.id; el.dataset.cat = c.id; el.style.setProperty('--cc', c.color);
+      const multi = c.type !== 'single', fid = LEGACY_FILE[c.id] || 'file-' + c.id;
+      const note = c.type === 'single' ? (c.duck ? 'Mentre suona, i loop si fermano e poi ripartono.' : '') : c.type === 'loop' ? 'I brani girano uno dopo l\'altro; si mette in pausa e riparte da dove era.' : (c.duck ? 'Mentre suona, i loop si fermano e poi ripartono da dove erano.' : 'Suona sopra i loop senza fermarli.');
+      el.innerHTML = `<h2><span class="cn"></span> <span class="sp"></span><span class="tag"></span><span class="kbd" data-act="${c.id}"></span>${c === fl ? '<span class="kbd">1–9</span>' : ''}</h2>
+        ${multi ? '<ul class="list"></ul>' : '<div class="fname"></div>'}
+        <div class="prog"><i></i></div>
+        <div class="row">${c.type === 'single' ? '<button data-a="load" title="Scegli il file">📂 Scegli</button><button data-a="play" class="main-act">▶ PLAY</button><button data-a="stop" title="Ferma">■</button>'
+          : c.type === 'loop' ? '<button data-a="load" title="Aggiungi brani">＋ Brani</button><button data-a="prev" title="Brano precedente">⏮</button><button data-a="play" class="main-act">⏯ PLAY / PAUSA</button><button data-a="next" title="Brano successivo">⏭</button>'
+          : '<button data-a="load" title="Aggiungi">＋ Aggiungi</button><button data-a="prev" title="Sposta il prossimo indietro">⏮</button><button data-a="play" class="main-act">▶ LANCIA</button><button data-a="stop" title="Ferma">■</button>'}</div>
+        ${note ? `<p class="note">${note}</p>` : ''}
+        <input type="file" id="${fid}" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" ${multi ? 'multiple' : ''} hidden>`;
+      el.querySelector('.cn').textContent = c.name.toUpperCase();
+      if (mixer && mixer.parentElement === host) host.insertBefore(el, mixer); else host.append(el);
+      const q = (a) => el.querySelector(`[data-a="${a}"]`), inp = el.querySelector('input[type=file]');
+      q('load').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia i file a registrazione ferma'); inp.click(); });
+      inp.addEventListener('change', async (e) => {
+        const f = [...e.target.files]; e.target.value = ''; if (!f.length) return; const ids = await addFiles(f);
+        if (c.type === 'single') S.deck[c.id] = ids[0]; else dkList(c.id).push(...ids);
+        saveDeck(); renderDeck();
+      });
+      q('play').addEventListener('click', () => c.type === 'list' ? listPlay(c.id, E.next[c.id] || 0) : catAction(c.id));
+      if (q('stop')) q('stop').addEventListener('click', () => catStop(c.id));
+      if (c.type === 'loop') {
+        q('next').addEventListener('click', () => loopJump(c.id, loopSt(c.id).idx + 1));
+        q('prev').addEventListener('click', () => { const v = E.voices[c.id], L = loopSt(c.id); if (v && posOf(v, now()) > 3) { if (blocked()) return; stopVoice(c.id); L.pos = 0; loopPlay(c.id); renderDeck(); } else loopJump(c.id, L.idx - 1); });
+      }
+      if (c.type === 'list') q('prev').addEventListener('click', () => { if (blocked()) return; E.next[c.id] = Math.max(0, (E.next[c.id] || 0) - 1); renderDeck(); });
+      this.cards[c.id] = { el, prog: el.querySelector('.prog i') };
+    }
+    if (typeof renderKeys === 'function') renderKeys();
+  }
+};
 function renderDeck() {
-  const iN = $('introName');
-  iN.textContent = S.deck.intro ? nameOf(S.deck.intro) : 'Nessuna sigla caricata'; iN.classList.toggle('set', !!S.deck.intro);
-  $('introPlay').disabled = !S.deck.intro;
-
-  const bl = $('bgList'); bl.replaceChildren();
-  if (!S.deck.bg.length) bl.append(emptyLi('Aggiungi uno o più brani: girano in loop uno dopo l\'altro.'));
-  S.deck.bg.forEach((id, i) => {
-    const cls = (i === E.bg.idx ? 'cur ' : '') + (i === E.bg.idx && E.bg.status === 'playing' ? 'play' : '');
-    bl.append(li(cls, i === E.bg.idx && E.bg.status === 'playing' ? '▶' : '•', nameOf(id), () => { if (blocked()) return; if (E.bg.status === 'playing') stopVoice('bg'); E.bg.idx = i; E.bg.pos = 0; if (E.bg.status !== 'held') bgPlay(); renderDeck(); }, [
-      ['▲', 'Sposta su', () => { if (isRec() || blocked()) return toast('Riordina a registrazione ferma'); moveIn(S.deck.bg, i, -1); saveDeck(); renderDeck(); }],
-      ['✕', 'Togli dalla lista', () => { if (isRec() || blocked()) return toast('Modifica la lista a registrazione ferma'); if (i === E.bg.idx && E.bg.status === 'playing') { stopVoice('bg'); E.bg.status = 'stopped'; } S.deck.bg.splice(i, 1); if (E.bg.idx >= S.deck.bg.length) E.bg.idx = 0; saveDeck(); renderDeck(); }]
-    ]));
-  });
-  $('bgTag').textContent = { playing: 'IN ONDA', paused: 'IN PAUSA', held: 'FERMO PER CAPITOLO', stopped: '' }[E.bg.status];
-
-  const cl = $('capList'); cl.replaceChildren();
-  if (!S.deck.caps.length) cl.append(emptyLi('Aggiungi gli stacchetti dei capitoli nell\'ordine in cui li lanci.'));
-  S.deck.caps.forEach((id, i) => {
-    const playing = E.voices.cap && E.voices.cap.extra.capIdx === i;
-    const cls = (playing ? 'play ' : '') + (i === E.capIdx ? 'next' : '');
-    cl.append(li(cls, i < 9 ? `[${i + 1}]` : '', nameOf(id), () => capPlay(i), [
-      ['▲', 'Sposta su', () => { if (isRec() || blocked()) return toast('Riordina a registrazione ferma'); moveIn(S.deck.caps, i, -1); saveDeck(); renderDeck(); }],
-      ['✕', 'Togli dalla lista', () => { if (isRec() || blocked()) return toast('Modifica la lista a registrazione ferma'); S.deck.caps.splice(i, 1); saveDeck(); renderDeck(); }]
-    ]));
-  });
-  const nx = S.deck.caps[E.capIdx];
-  $('capPlay').innerHTML = nx ? `▶ LANCIA [${E.capIdx + 1}]` : '▶ LANCIA PROSSIMO';
-  $('capPlay').disabled = !nx;
+  for (const c of CATS()) {
+    const card = DECKUI.cards[c.id]; if (!card) continue; const el = card.el, id = c.id;
+    const editLock = (fn) => () => { if (isRec() || blocked()) return toast('Modifica la lista a registrazione ferma'); fn(); saveDeck(); renderDeck(); };
+    if (c.type === 'single') {
+      const f = dk(id), fn = el.querySelector('.fname');
+      fn.textContent = f ? nameOf(f) : 'Nessun file caricato'; fn.classList.toggle('set', !!f);
+      el.querySelector('[data-a="play"]').disabled = !f; el.querySelector('.tag').textContent = E.voices[id] ? 'IN ONDA' : '';
+      continue;
+    }
+    const arr = dkList(id), ul = el.querySelector('.list'); ul.replaceChildren();
+    if (c.type === 'loop') {
+      const L = loopSt(id);
+      if (!arr.length) ul.append(emptyLi('Aggiungi uno o più brani: girano in loop uno dopo l\'altro.'));
+      arr.forEach((fid, i) => {
+        const on = i === L.idx && L.status === 'playing';
+        ul.append(li((i === L.idx ? 'cur ' : '') + (on ? 'play' : ''), on ? '▶' : '•', nameOf(fid), () => { if (blocked()) return; if (L.status === 'playing') stopVoice(id); L.idx = i; L.pos = 0; if (L.status !== 'held') loopPlay(id); renderDeck(); }, [
+          ['▲', 'Sposta su', editLock(() => moveIn(arr, i, -1))],
+          ['✕', 'Togli dalla lista', editLock(() => { if (i === L.idx && L.status === 'playing') { stopVoice(id); L.status = 'stopped'; } arr.splice(i, 1); if (L.idx >= arr.length) L.idx = 0; })]
+        ]));
+      });
+      el.querySelector('.tag').textContent = { playing: 'IN ONDA', paused: 'IN PAUSA', held: 'IN ATTESA', stopped: '' }[L.status];
+    } else {
+      const nx = E.next[id] || 0;
+      if (!arr.length) ul.append(emptyLi('Aggiungi i brani nell\'ordine in cui li lanci.'));
+      arr.forEach((fid, i) => {
+        const playing = E.voices[id] && E.voices[id].extra.capIdx === i;
+        ul.append(li((playing ? 'play ' : '') + (i === nx ? 'next' : ''), c === firstList() && i < 9 ? `[${i + 1}]` : `${i + 1}`, nameOf(fid), () => listPlay(id, i), [
+          ['▲', 'Sposta su', editLock(() => moveIn(arr, i, -1))],
+          ['✕', 'Togli dalla lista', editLock(() => arr.splice(i, 1))]
+        ]));
+      });
+      const b = el.querySelector('[data-a="play"]'); b.innerHTML = arr[nx] ? `▶ LANCIA [${nx + 1}]` : '▶ LANCIA'; b.disabled = !arr[nx];
+      el.querySelector('.tag').textContent = E.voices[id] ? 'IN ONDA' : '';
+    }
+  }
+  if (typeof HELP !== 'undefined') HELP.refresh();
 }
 function renderAll() { renderStatus(); renderDeck(); }
 
@@ -2227,14 +2359,17 @@ function dragPop(pop) {
     hd.addEventListener('pointermove', mv); hd.addEventListener('pointerup', up);
   });
 }
-function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
+function buildMixer(host, mix, { onChange, meters = false, mutes = null, cats = null }) {
   host.replaceChildren(); const refs = {};
   let style = host.id === 'liveStrips' ? mixStyleNow() : (S.settings.mixStyle || 'console'); if (style === 'bars' && host.id !== 'liveStrips') style = 'console';
   host.classList.toggle('console', style === 'console'); host.classList.toggle('bars', style === 'bars');
-  const bars = style === 'bars';
-  for (const ch of ALL) {
+  const bars = style === 'bars', chs = allOf(cats || CATS()), rows = Math.ceil(chs.length / 2);
+  chs.forEach((ch, k) => { if (!mix[ch]) mix[ch] = fullP(ch, S.defaults[ch], cats); });
+  for (const [k, ch] of chs.entries()) {
     const p = mix[ch]; const d = document.createElement('div'); d.className = 'strip'; d.dataset.ch = ch; const pre = host.id + '-' + ch;
-    d.innerHTML = `<div class="h"><i class="dot"></i><b>${CH_LABEL[ch]}</b>${mutes && ch === 'voice' ? `<span class="gled" ${S.settings.gate && NS.gate ? '' : 'hidden'} title="Noise gate: verde = microfono aperto">GATE</span>` : ''}<span class="v"></span></div>
+    d.style.setProperty('--cc', chColor(ch, cats || CATS()));
+    if (bars) { d.style.gridColumn = String(Math.floor(k / rows) + 1); d.style.gridRow = String(k % rows + 1); }
+    d.innerHTML = `<div class="h"><i class="dot"></i><b>${chLabel(ch, cats || CATS())}</b>${mutes && ch === 'voice' ? `<span class="gled" ${S.settings.gate && NS.gate ? '' : 'hidden'} title="Noise gate: verde = microfono aperto">GATE</span>` : ''}<span class="v"></span></div>
       <canvas class="eqc" title="Curva dell'EQ: apri «Gain ed EQ» per cambiarla"></canvas>
       <div class="cs-main">
         ${meters ? '<div class="mcol"><output class="pk">−∞</output><canvas class="mtr"></canvas></div>' : ''}
@@ -2242,7 +2377,7 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
       </div>
       <div class="cs-btns"><button class="rst" title="Riporta al predefinito">↺</button>${mutes ? '<button class="mute" aria-pressed="false">MUTE</button>' : ''}</div>
       ${mutes && ch === 'voice' && !bars ? inmicHtml(pre) : ''}
-      <details class="eq"><summary title="Gain, EQ${mutes && ch === 'voice' ? ' e ingresso del microfono' : ''}">Gain ed EQ</summary><div class="eqpop">${bars ? `<div class="eqpop-h"><b>${CH_LABEL[ch]}</b><button class="eqx" title="Chiudi">✕</button></div>` + (mutes && ch === 'voice' ? inmicHtml(pre) : '') : ''}<div class="knobs"></div><button class="def">★ Usa questi valori come predefiniti</button></div></details>`;
+      <details class="eq"><summary title="Gain, EQ${mutes && ch === 'voice' ? ' e ingresso del microfono' : ''}">Gain ed EQ</summary><div class="eqpop">${bars ? `<div class="eqpop-h"><b>${chLabel(ch, cats || CATS())}</b><button class="eqx" title="Chiudi">✕</button></div>` + (mutes && ch === 'voice' ? inmicHtml(pre) : '') : ''}<div class="knobs"></div><button class="def">★ Usa questi valori come predefiniti</button></div></details>`;
     const kn = d.querySelector('.knobs'); const ctl = {}; const eqc = d.querySelector('.eqc');
     const redrawEq = () => requestAnimationFrame(() => EQR.draw(eqc, ch, p));
     for (const K of KNOBS) {
@@ -2272,8 +2407,8 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
       if (ctl.hp) ctl.hp.cb.checked = !!p.hp; redrawEq();
     };
     refresh();
-    d.querySelector('.rst').addEventListener('click', () => { Object.assign(p, fullP(ch, S.defaults[ch])); refresh(); onChange(ch); toast(`${CH_LABEL[ch]}: livelli predefiniti ripristinati`); });
-    d.querySelector('.def').addEventListener('click', () => { S.defaults[ch] = { ...p }; saveDeck(); toast(`${CH_LABEL[ch]}: questi valori ora sono il predefinito`); });
+    d.querySelector('.rst').addEventListener('click', () => { Object.assign(p, fullP(ch, S.defaults[ch])); refresh(); onChange(ch); toast(`${chLabel(ch, cats || CATS())}: livelli predefiniti ripristinati`); });
+    d.querySelector('.def').addEventListener('click', () => { S.defaults[ch] = { ...p }; saveDeck(); toast(`${chLabel(ch, cats || CATS())}: questi valori ora sono il predefinito`); });
     if (mutes) { const m = d.querySelector('.mute'); m.setAttribute('aria-pressed', String(mutes[ch])); m.addEventListener('click', () => { mutes[ch] = !mutes[ch]; m.setAttribute('aria-pressed', String(mutes[ch])); onChange(ch); }); }
     const inR = d.querySelector(`#${pre}-in`);
     if (inR) { inR.value = S.settings.micGain || 0; inR.nextElementSibling.textContent = '+' + inR.value + ' dB'; inR.addEventListener('input', () => setMicGain(+inR.value)); }
@@ -2285,6 +2420,7 @@ function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
       <div class="lufs"><output class="lv-n">—</output><small>LUFS (3 s)</small></div>
       <div class="cs-main"><div class="mcol"><output class="pk">−∞</output><canvas class="mtr"></canvas></div><div class="lv-scale"><span>alto</span><span>buono</span><span>basso</span></div></div>
       <span class="note lv-hint">Parla: misuro la voce come suonerà nel file.</span>`;
+    if (bars) m.style.gridRow = `1 / span ${rows}`;
     host.append(m); refs.master = { cv: m.querySelector('.mtr'), out: m.querySelector('.pk'), hold: -100, holdT: 0, num: m.querySelector('.lv-n'), hint: m.querySelector('.lv-hint') };
   }
   return refs;
@@ -2316,7 +2452,7 @@ function loop(t) {
     $('tc').textContent = fmt(R.state === 'preroll' ? R.Tanchor : T);
     if (meterRefs) {
       const set = (ch, an) => { const r = meterRefs[ch]; if (r && r.cv) drawMeter(r.cv, peakDb(an), r); };
-      set('voice', E.micAn); for (const ch of CHS) set(ch, E.an[ch]);
+      set('voice', E.micAn); for (const ch of chsOf()) if (E.an[ch]) set(ch, E.an[ch]);
       const mr = meterRefs.master; if (mr) {
         set('master', E.micAn); const lv = LV.read();
         if (lv) { const v = lv.s; mr.num.textContent = v < -70 ? '—' : v.toFixed(1); const st = v < -70 ? ['Parla: misuro la voce come suonerà nel file.', 'var(--dim)'] : v < -30 ? ['Molto basso: alza «Ingresso mic» o avvicinati al microfono', 'var(--rec)'] : v < -24 ? ['Basso: alza un po\' «Ingresso mic»', 'var(--warn)'] : v > -10 ? ['Troppo alto: abbassa «Ingresso mic»', 'var(--rec)'] : ['Buono', 'var(--ok)'];
@@ -2331,7 +2467,7 @@ function loop(t) {
       }
     }
     const prog = (ch, el) => { const v = E.voices[ch]; el.style.width = v ? Math.min(100, posOf(v, now()) / v.dur * 100) + '%' : '0%'; };
-    prog('intro', $('introProg')); prog('bg', $('bgProg')); prog('cap', $('capProg'));
+    for (const id in DECKUI.cards) prog(id, DECKUI.cards[id].prog);
     TP.frame(t || performance.now());
     CAM.render(t || performance.now()); OUT.render(t || performance.now());
     const tn = performance.now(); if (!FPS.t) FPS.t = tn;
@@ -2412,7 +2548,7 @@ function openExport(el, s) {
   seek.addEventListener('change', () => { dragging = false; PV.pos = +seek.value; if (PV.playing) PV.play(+seek.value); else PV.seekVideo(+seek.value); });
   const host = box.querySelector('.strips'); host.id = 'mix-' + s.id;
   let saveT = null;
-  buildMixer(host, s.mix, { onChange: (ch) => { if (PV) PV.set(ch); clearTimeout(saveT); saveT = setTimeout(() => DB.put('sessions', s.id, s), 400); } });
+  buildMixer(host, s.mix, { cats: catsOf(s), onChange: (ch) => { if (PV) PV.set(ch); clearTimeout(saveT); saveT = setTimeout(() => DB.put('sessions', s.id, s), 400); } });
   if (s.video && s.video.nGroups > 0) { const o = document.createElement('option'); o.value = 'webm'; o.textContent = 'Video WebM (YouTube)'; box.querySelector('.fmt').append(o); }
   if (typeof lamejs === 'undefined') { box.querySelector('.fmt').value = 'wav'; box.querySelectorAll('.fmt option').forEach(o => { if (o.value !== 'wav' && o.value !== 'webm') o.disabled = true; }); }
   const saveS = () => DB.put('sessions', s.id, s);
@@ -2512,7 +2648,7 @@ async function exportStudio() {
   const msg = $('bkMsg'); msg.textContent = 'Preparo il file…';
   const items = [];
   for (const k of ['deck', 'settings', 'prompter']) { const v = await DB.get('state', k); if (v) items.push({ store: 'state', key: k, value: v }); }
-  const ids = new Set([S.deck.intro, ...S.deck.bg, ...S.deck.caps, 'ov-bg', 'ov-logo'].filter(Boolean));
+  const ids = new Set([...deckIds(), 'ov-bg', 'ov-logo'].filter(Boolean));
   for (const id of ids) { const f = await DB.get('files', id); if (f) items.push({ store: 'files', key: id, value: f }); }
   const blob = await PACK.build('studio', items, 'Studio');
   const d = new Date(); PACK.save(blob, `OnAir studio ${d.toLocaleDateString('it-IT').replace(/\//g, '-')}.onair`);
@@ -2558,11 +2694,12 @@ async function importSessionFile(file) {
 const TRK = [
   { ch: 'voice', label: 'VOCE', h: 96 }, { ch: 'intro', label: 'SIGLA', h: 46 }, { ch: 'bg', label: 'SOTTOFONDO', h: 46 }, { ch: 'cap', label: 'CAPITOLI', h: 46 }
 ];
-const CHC = () => { const cs = getComputedStyle(document.documentElement); return { voice: cs.getPropertyValue('--c-voice').trim() || '#00e5ff', intro: cs.getPropertyValue('--c-intro').trim() || '#ff2bd6', bg: cs.getPropertyValue('--c-bg').trim() || '#ffe600', cap: cs.getPropertyValue('--c-cap').trim() || '#38ff7a' }; };
+const CHC = () => { const o = { voice: '#00e5ff' }; for (const c of catsOf(ED.s)) o[c.id] = c.color; for (const c of DEF_CATS()) o[c.id] = o[c.id] || c.color; return o; };
 const ED = {
   open: false, s: null, cv: null, g: null, HW: 118, RH: 30, x0: 0, pps: 20, ph: 0, sel: null, selSeg: null, selCh: null, drag: null, undo: [], redo: [], peaks: null, peaksFor: null, dirty: true, saveT: null,
   async start(s, box) {
-    this.s = s; this.box = box; this.open = true; this.sel = null; this.selSeg = null; this.selCh = null; this.undo = []; this.redo = [];
+    this.s = s; TRK.length = 0; TRK.push({ ch: 'voice', label: 'VOCE', h: 96 }, ...catsOf(s).map(c => ({ ch: c.id, label: c.name.toUpperCase().slice(0, 14), h: 46 })));
+    this.box = box; this.open = true; this.sel = null; this.selSeg = null; this.selCh = null; this.undo = []; this.redo = [];
     $('edModal').hidden = false; $('edName').textContent = s.name;
     const pvv = box.querySelector('.pvv'); this.pvv = pvv; this.pvvParent = pvv ? pvv.parentElement : null; if (pvv) { $('edVidHost').append(pvv); $('edVidHost').hidden = false; } else $('edVidHost').hidden = true;
     this.cv = $('edCanvas'); this.g = this.cv.getContext('2d'); this.resize();
@@ -2691,7 +2828,7 @@ const ED = {
     const info = (t) => { const p = document.createElement('div'); p.className = 'ed-info'; p.textContent = t; box.append(p); };
     if (this.selSeg) {
       const g = this.selSeg, nm = (s.names && s.names[g.fileId]) || S.names.get(g.fileId) || 'file';
-      info(`${CH_LABEL[g.ch]} · ${nm} · da ${fmt(g.tStart)} · durata ${(g.tEnd - g.tStart).toFixed(1)} s`);
+      info(`${chLabel(g.ch, catsOf(this.sess))} · ${nm} · da ${fmt(g.tStart)} · durata ${(g.tEnd - g.tStart).toFixed(1)} s`);
       const kn = document.createElement('div'); kn.className = 'knobs'; box.append(kn);
       const slider = (label, key, min, max, step, unit, def) => {
         const id = 'ed-' + key, l = document.createElement('label'); l.htmlFor = id; l.textContent = label;
@@ -2759,7 +2896,7 @@ const ED = {
     // capitoli
     for (const c of s.chapters || []) {
       const x = this.tToX(c.t); if (x < HW - 2 || x > W) continue;
-      g.fillStyle = c === this.selChap ? '#ffffff' : C.cap; g.beginPath(); g.moveTo(x, RH - 15); g.lineTo(x + 11, RH - 10); g.lineTo(x, RH - 5); g.closePath(); g.fill(); g.fillRect(x, RH - 15, 1.5, H - RH + 15);
+      g.fillStyle = c === this.selChap ? '#ffffff' : (C[(catsOf(s).find(x => x.chap) || {}).id] || '#38ff7a'); g.beginPath(); g.moveTo(x, RH - 15); g.lineTo(x + 11, RH - 10); g.lineTo(x, RH - 5); g.closePath(); g.fill(); g.fillRect(x, RH - 15, 1.5, H - RH + 15);
       g.font = '600 10px "Exo 2", sans-serif'; g.textBaseline = 'middle'; g.fillText(c.title.slice(0, 22), x + 13, RH - 10);
     }
     // fine e cursore
@@ -2814,7 +2951,7 @@ const SYNC_GROUPS = [
   ['testo', 'Testo del teleprompter'], ['audio', 'Sigla, sottofondi e capitoli (file audio)'], ['mixer', 'Mixer e livelli predefiniti'],
   ['video', 'Video: effetto, inquadratura, green screen, logo, sfondo'], ['layout', 'Disposizioni, vista, tasti, re-take'], ['plat', 'Canale e piattaforme']
 ];
-const SYNC_KEYS = { video: ['video', 'ov'], layout: ['layouts', 'layout', 'keys', 'mixStyle', 'mixStyleWide', 'orient', 'wideLay', 'retakeSec', 'preroll'], plat: ['plat', 'channel'] };
+const SYNC_KEYS = { audio: ['cats'], video: ['video', 'ov'], layout: ['layouts', 'layout', 'keys', 'mixStyle', 'mixStyleWide', 'orient', 'wideLay', 'retakeSec', 'preroll'], plat: ['plat', 'channel'] };
 const SYNC = {
   cfg: null, timer: null,
   async load() {
@@ -2840,7 +2977,7 @@ const SYNC = {
     status('Preparo i dati…');
     const items = [];
     for (const k of ['deck', 'settings', 'prompter']) { const v = await DB.get('state', k); if (v) items.push({ store: 'state', key: k, value: v }); }
-    const ids = new Set([S.deck.intro, ...S.deck.bg, ...S.deck.caps, 'ov-bg', 'ov-logo', 'ov-bgv'].filter(Boolean));
+    const ids = new Set([...deckIds(), 'ov-bg', 'ov-logo', 'ov-bgv'].filter(Boolean));
     for (const id of ids) { const f = await DB.get('files', id); if (f) items.push({ store: 'files', key: id, value: f }); }
     const blob = await PACK.build('studio', items, 'Sincronizzazione');
     if (blob.size > 70 * 1048576) throw new Error('lo studio è troppo grande per la sincronizzazione (oltre 70 MB): usa il file .onair');
@@ -2898,7 +3035,8 @@ function fmtCh(t) { t = Math.max(0, Math.floor(t)); const h = Math.floor(t / 360
 function parseCh(v) { const p = String(v).trim().split(':').map(x => x.trim()); if (!p.length || p.some(x => !/^\d+$/.test(x)) || p.length > 3) return null; return p.reduce((a, x) => a * 60 + (+x), 0); }
 function autoChapters(s) {
   const yt = S.settings.plat.yt, list = [{ t: 0, title: yt.intro || 'Introduzione' }]; let n = 0;
-  const caps = s.segs.filter(g => g.ch === 'cap' && !g.cont && g.off < 0.5).sort((a, b) => a.tStart - b.tStart);
+  const chapCh = catsOf(s).filter(c => c.chap).map(c => c.id);
+  const caps = s.segs.filter(g => chapCh.includes(g.ch) && !g.cont && g.off < 0.5).sort((a, b) => a.tStart - b.tStart);
   for (const g of caps) {
     n++; const raw = (s.names && s.names[g.fileId]) || S.names.get(g.fileId) || '';
     const title = yt.chName === 'num' || !raw ? `Capitolo ${n}` : raw.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim();
@@ -2992,7 +3130,9 @@ const ORIENT = {
 };
 
 /* Disposizione dei pannelli */
-const PANELS = [['transport', 'Registrazione (contatore e pulsanti)'], ['prompter', 'Teleprompter'], ['video', 'Video'], ['intro', 'Sigla'], ['bg', 'Sottofondo'], ['cap', 'Capitoli'], ['mixer', 'Mixer']];
+const PANELS_BASE = [['transport', 'Registrazione (contatore e pulsanti)'], ['prompter', 'Teleprompter'], ['video', 'Video']];
+const panelsAll = () => [...PANELS_BASE, ...CATS().map(c => [c.id, c.name]), ['mixer', 'Mixer']];
+const panelName = (p) => (panelsAll().find(x => x[0] === p) || [p, p])[1];
 const LAY_PRESETS = {
   classico: { name: 'Classico', order: ['transport', 'prompter', 'video', 'intro', 'bg', 'cap', 'mixer'], w: { transport: '1', prompter: '2/3', video: '1/3', intro: '1/3', bg: '1/3', cap: '1/3', mixer: '1' }, hidden: [], tall: false },
   davanti: { name: 'Teleprompter davanti (sotto la webcam)', order: ['prompter', 'transport', 'video', 'cap', 'bg', 'intro', 'mixer'], w: { prompter: '1', transport: '1', video: '1/3', cap: '1/3', bg: '1/3', intro: '1/3', mixer: '1' }, hidden: [], tall: true },
@@ -3006,7 +3146,13 @@ const WIDE = {
     const m = { center: [{ transport: '0', video: '0', prompter: '1', intro: '2', bg: '2', cap: '2' }, [1, 1.35, 0.95]], left: [{ prompter: '0', transport: '1', video: '1', intro: '2', bg: '2', cap: '2' }, [1.35, 1, 0.95]], right: [{ transport: '0', video: '0', intro: '1', bg: '1', cap: '1', prompter: '2' }, [1, 0.95, 1.35]] }[wl] || [];
     return { order, col: { ...m[0], mixer: 'b' }, w: m[1] };
   },
-  of(L) { const d = this.def(); const W = L && L.wide; if (!W) return d; return { order: [...W.order, ...d.order.filter(p => !W.order.includes(p))], col: { ...d.col, ...W.col }, w: W.w || d.w }; },
+  of(L) {
+    const d = this.def(), ids = panelsAll().map(x => x[0]), W = (L && L.wide) || d;
+    const order = [...W.order, ...d.order.filter(p => !W.order.includes(p))].filter(p => ids.includes(p));
+    for (const p of ids) if (!order.includes(p)) order.splice(order.indexOf('mixer') < 0 ? order.length : order.indexOf('mixer'), 0, p);
+    const col = { ...d.col, ...(W.col || {}) }; for (const p of ids) if (!(p in col)) col[p] = '2';
+    return { order, col, w: W.w || d.w };
+  },
   build(L) {
     const host = $('panels'), W = this.of(L), hidden = (L && L.hidden) || [];
     let cols = [...host.querySelectorAll(':scope>.wcol')], bot = host.querySelector(':scope>.wbot');
@@ -3023,13 +3169,21 @@ const WIDE = {
   },
   unbuild() {
     const host = $('panels'); if (!host.querySelector(':scope>.wcol')) return;
-    for (const [p] of PANELS) { const el = host.querySelector(`[data-panel="${p}"]`); if (el) host.append(el); }
+    for (const [p] of panelsAll()) { const el = host.querySelector(`[data-panel="${p}"]`); if (el) host.append(el); }
     host.querySelectorAll(':scope>.wcol,:scope>.wbot').forEach(d => d.remove()); host.style.gridTemplateColumns = '';
   }
 };
 const LAY = {
   cur: null,
-  all() { return { ...LAY_PRESETS, ...(S.settings.layouts || {}) }; },
+  all() {
+    const out = {}, ids = panelsAll().map(x => x[0]);
+    for (const [k, L0] of Object.entries({ ...LAY_PRESETS, ...(S.settings.layouts || {}) })) {
+      const L = { ...L0, order: L0.order.filter(p => ids.includes(p)), w: { ...L0.w } };
+      for (const p of ids) if (!L.order.includes(p)) { const mi = L.order.indexOf('mixer'); L.order.splice(mi < 0 ? L.order.length : mi, 0, p); L.w[p] = L.w[p] || '1/3'; }
+      out[k] = L;
+    }
+    return out;
+  },
   apply(id) {
     const all = this.all(); const L = all[id] || all.classico; S.settings.layout = all[id] ? id : 'classico'; this.cur = L;
     const host = $('panels');
@@ -3062,7 +3216,7 @@ const LAY = {
         c.value = W.col[p] ?? '0'; c.addEventListener('change', () => { W.col[p] = c.value; this.preview(); });
         const up = document.createElement('button'); up.textContent = '▲'; up.title = 'Sposta su'; up.disabled = i === 0; up.addEventListener('click', () => { W.order.splice(i, 1); W.order.splice(i - 1, 0, p); this.renderList(); this.preview(); });
         const dn = document.createElement('button'); dn.textContent = '▼'; dn.title = 'Sposta giù'; dn.disabled = i === W.order.length - 1; dn.addEventListener('click', () => { W.order.splice(i, 1); W.order.splice(i + 1, 0, p); this.renderList(); this.preview(); });
-        box.append(vis, lab(PANELS.find(x => x[0] === p)[1]), c, up, dn);
+        box.append(vis, lab(panelName(p)), c, up, dn);
       });
       const cb = $('layCols'); cb.replaceChildren(lab('Larghezza colonne:'));
       ['Sinistra', 'Centro', 'Destra'].forEach((n, i) => {
@@ -3080,7 +3234,7 @@ const LAY = {
       w.value = E2.w[p] || '1'; w.addEventListener('change', () => { E2.w[p] = w.value; this.preview(); });
       const up = document.createElement('button'); up.textContent = '▲'; up.title = 'Sposta su'; up.disabled = i === 0; up.addEventListener('click', () => { E2.order.splice(i, 1); E2.order.splice(i - 1, 0, p); this.renderList(); this.preview(); });
       const dn = document.createElement('button'); dn.textContent = '▼'; dn.title = 'Sposta giù'; dn.disabled = i === E2.order.length - 1; dn.addEventListener('click', () => { E2.order.splice(i, 1); E2.order.splice(i + 1, 0, p); this.renderList(); this.preview(); });
-      box.append(vis, lab(PANELS.find(x => x[0] === p)[1]), w, up, dn);
+      box.append(vis, lab(panelName(p)), w, up, dn);
     });
     const tall = document.createElement('input'); tall.type = 'checkbox'; tall.checked = !!E2.tall; tall.addEventListener('change', () => { E2.tall = tall.checked; this.preview(); });
     const tl = lab('Teleprompter più alto'); tl.style.gridColumn = '2 / 6';
@@ -3117,17 +3271,25 @@ const LAY = {
 };
 
 /* Scorciatoie */
-const ACTIONS = [
-  ['rec', 'Registra / pausa / riprendi', ' '], ['retake', 'Re-take', 'r'], ['intro', 'Sigla', 's'], ['bg', 'Sottofondo play / pausa', 'b'],
-  ['cap', 'Prossimo capitolo', 'Enter'], ['tpRun', 'Teleprompter: avvia / ferma', 'p'], ['tpShow', 'Teleprompter: mostra / nascondi', 't'],
+const ACTIONS_BASE = [
+  ['rec', 'Registra / pausa / riprendi', ' '], ['retake', 'Re-take', 'r'], ['tpRun', 'Teleprompter: avvia / ferma', 'p'], ['tpShow', 'Teleprompter: mostra / nascondi', 't'],
   ['tpBack', 'Teleprompter: testo indietro', 'ArrowUp'], ['tpFwd', 'Teleprompter: testo avanti', 'ArrowDown'],
   ['tpUp', 'Teleprompter: più veloce', 'Shift+ArrowUp'], ['tpDown', 'Teleprompter: più lento', 'Shift+ArrowDown'], ['video', 'Video sì / no', 'v'], ['sub', 'Animazione «Iscriviti»', 'i'], ['tpMode', 'Teleprompter: come scorre', 'm'], ['help', 'Specchietto delle scorciatoie', 'h']
 ];
-const DEF_KEYS = Object.fromEntries(ACTIONS.map(a => [a[0], a[2]]));
+let ACTIONS = [], DEF_KEYS = {};
+/* Le azioni delle categorie (una per categoria) si aggiungono a quelle fisse */
+function rebuildActions() {
+  const verb = { single: 'play', loop: 'play / pausa', list: 'lancia il prossimo' };
+  const cat = CATS().map(c => [c.id, c.name + ': ' + verb[c.type], c.key || '']);
+  ACTIONS = [...ACTIONS_BASE.slice(0, 2), ...cat, ...ACTIONS_BASE.slice(2)];
+  DEF_KEYS = Object.fromEntries(ACTIONS.map(a => [a[0], a[2]]));
+}
+rebuildActions();
 const KEYS = () => {
   const k = S.settings.keys || (S.settings.keys = { ...DEF_KEYS });
   // azioni nuove: prendono il tasto predefinito se non è già usato
   for (const [a, d] of Object.entries(DEF_KEYS)) if (!(a in k)) k[a] = Object.values(k).includes(d) ? '' : d;
+  for (const a of Object.keys(k)) if (!(a in DEF_KEYS)) delete k[a];
   return k;
 };
 const normKey = (k, shift) => k.length === 1 ? k.toLowerCase() : (shift && !['Shift'].includes(k) ? 'Shift+' + k : k);
@@ -3167,20 +3329,22 @@ document.addEventListener('keydown', (e) => {
 }, true);
 
 /* Specchietto delle scorciatoie: finestra nell'app (H) o finestra piccola sempre in primo piano */
-const HELP_GROUPS = [['Registrazione', ['rec', 'retake']], ['Audio', ['intro', 'bg', 'cap']], ['Teleprompter', ['tpRun', 'tpMode', 'tpBack', 'tpFwd', 'tpUp', 'tpDown', 'tpShow']], ['Video', ['video', 'sub']], ['Aiuto', ['help']]];
+const HELP_GROUPS = [['Registrazione', ['rec', 'retake']], ['Audio', null], ['Teleprompter', ['tpRun', 'tpMode', 'tpBack', 'tpFwd', 'tpUp', 'tpDown', 'tpShow']], ['Video', ['video', 'sub']], ['Aiuto', ['help']]];
 const HELP = {
   pip: null, iv: null,
   html() {
     const e2 = (t) => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const st = { idle: 'PRONTO', rec: '● REGISTRAZIONE', hold: R.holdMode === 'retake' ? '↶ RE-TAKE' : '❚❚ PAUSA', preroll: '▶ PRE-ASCOLTO' }[R.state] || '';
     const name = (a) => (ACTIONS.find(x => x[0] === a) || [, a])[1].replace(/^Teleprompter: /, '');
-    const on = { bg: E.bg.status === 'playing', intro: !!E.voices.intro, tpRun: TP.running, video: S.settings.video.on };
-    const extra = { cap: S.deck.caps.length ? 'prossimo: ' + (nameOf(S.deck.caps[E.capIdx % S.deck.caps.length]) || '').replace(/\.[^.]+$/, '') : '', tpMode: { fixed: 'velocità fissa', voice: 'quando parli', follow: 'segue le parole' }[TP.mode] };
+    const on = { tpRun: TP.running, video: S.settings.video.on }; for (const c of CATS()) on[c.id] = !!E.voices[c.id];
+    const extra = { tpMode: { fixed: 'velocità fissa', voice: 'quando parli', follow: 'segue le parole' }[TP.mode] };
+    for (const c of CATS()) if (c.type === 'list') { const a = dkList(c.id), nx = E.next[c.id] || 0; extra[c.id] = a[nx] ? 'prossimo: ' + nameOf(a[nx]).replace(/\.[^.]+$/, '') : ''; } else if (c.type === 'loop' && loopSt(c.id).status === 'held') extra[c.id] = 'in attesa';
     let h = `<div class="st">${st}${R.state === 'hold' ? ' · ← → secondi · Invio conferma · Esc annulla' : ''}</div>`;
-    for (const [g, acts] of HELP_GROUPS) {
+    for (const [g, acts0] of HELP_GROUPS) {
+      const acts = acts0 || chsOf();
       h += `<section><h4>${g.toUpperCase()}</h4>`;
       for (const a of acts) h += `<div class="hr${on[a] ? ' on' : ''}"><span>${e2(name(a))}${extra[a] ? ` <small style="opacity:.7">(${e2(extra[a])})</small>` : ''}</span><span class="kbd">${e2(keyLabel(a))}</span></div>`;
-      if (g === 'Audio') h += `<div class="hr"><span>Capitolo diretto</span><span class="kbd">1–9</span></div>`;
+      if (g === 'Audio' && firstList()) h += `<div class="hr"><span>${e2(firstList().name)}: numero diretto</span><span class="kbd">1–9</span></div>`;
       h += '</section>';
     }
     return h;
@@ -3232,16 +3396,17 @@ function onKeyMain(e) {
     else if (k === 'Enter' || act === 'rec' || act === 'retake') { commitHold(); e.preventDefault(); }
     return;
   }
-  if (/^[1-9]$/.test(k)) { capPlay(+k - 1); return; }
+  if (/^[1-9]$/.test(k)) { if (e.repeat) return; const fl = firstList(); if (fl) listPlay(fl.id, +k - 1); return; }
   if (!act) return;
   e.preventDefault();
+  // tenendo premuto un tasto la tastiera lo ripete: solo le frecce del teleprompter devono ripetersi (prima la sigla ripartiva da capo)
+  if (e.repeat && !['tpBack', 'tpFwd', 'tpUp', 'tpDown'].includes(act)) return;
+  const tk = performance.now(); if (onKeyMain.last && onKeyMain.last.k === nk && tk - onKeyMain.last.t < 80) return; onKeyMain.last = { k: nk, t: tk };
   if (act === 'help') { HELP.toggle(); return; }
   if (!$('helpModal').hidden) $('helpModal').hidden = true;
   if (act === 'rec') { if (R.state === 'idle') recStart(); else if (R.state === 'rec') enterHold('pause'); }
   else if (act === 'retake') enterHold('retake');
-  else if (act === 'intro') introPlay();
-  else if (act === 'bg') bgToggle();
-  else if (act === 'cap') capPlay(E.capIdx);
+  else if (catOf(act)) catAction(act);
   else if (act === 'tpRun') TP.toggle();
   else if (act === 'tpShow') { TP.visible = !TP.visible; TP.layout(); TP.save(); }
   else if (act === 'sub') SUB.start();
@@ -3254,8 +3419,60 @@ function onKeyMain(e) {
   HELP.refresh();
 }
 
+/* Impostazioni → Categorie audio */
+const CAT_COLORS = ['#00b3ff', '#ff7a00', '#b46bff', '#ff4d6d', '#7dff3a', '#00ffd0', '#ffb3f0', '#ffffff'];
+const CATUI = {
+  render() {
+    const box = $('catList'); if (!box) return; box.replaceChildren(); const cats = CATS();
+    cats.forEach((c, i) => {
+      const r = document.createElement('div'); r.className = 'catrow'; r.style.setProperty('--cc', c.color);
+      r.innerHTML = `<input type="color" title="Colore" aria-label="Colore"><input type="text" class="nm" aria-label="Nome" maxlength="24">
+        <select class="ty" aria-label="Comportamento">${Object.entries(CAT_TYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
+        <input type="text" class="cu" aria-label="Segnale nel teleprompter" title="Segnale nel teleprompter: [${cueWord(c)}]" maxlength="24">
+        <label class="chk" title="Mentre suona, i loop (es. il sottofondo) si fermano e poi ripartono"><input type="checkbox" class="du"> ferma i loop</label>
+        <label class="chk" title="Ogni brano lanciato crea un capitolo YouTube"><input type="checkbox" class="ch"> capitoli YT</label>
+        <button class="up" title="Sposta su">▲</button><button class="dn" title="Sposta giù">▼</button><button class="rm danger" title="Elimina la categoria">✕</button>`;
+      const q = (k) => r.querySelector(k);
+      q('input[type=color]').value = c.color; q('.nm').value = c.name; q('.ty').value = c.type; q('.cu').value = c.cue || ''; q('.cu').placeholder = cueWord(c);
+      q('.du').checked = !!c.duck; q('.du').disabled = c.type === 'loop'; q('.ch').checked = !!c.chap; q('.ch').disabled = c.type === 'loop';
+      q('.up').disabled = i === 0; q('.dn').disabled = i === cats.length - 1; q('.rm').disabled = cats.length <= 1;
+      const set = (fn) => { if (R.state !== 'idle') { this.render(); return toast('Cambia le categorie a registrazione ferma'); } fn(); this.apply(); };
+      q('input[type=color]').addEventListener('change', (e) => set(() => { c.color = e.target.value; }));
+      q('.nm').addEventListener('change', (e) => set(() => { const v = e.target.value.trim(); if (v) c.name = v; }));
+      q('.cu').addEventListener('change', (e) => set(() => { c.cue = e.target.value.trim().toUpperCase(); }));
+      q('.ty').addEventListener('change', (e) => set(() => { if (E.voices[c.id]) stopVoice(c.id); delete E.loops[c.id]; c.type = e.target.value; if (c.type === 'loop') { c.duck = false; c.chap = false; } }));
+      q('.du').addEventListener('change', (e) => set(() => { c.duck = e.target.checked; }));
+      q('.ch').addEventListener('change', (e) => set(() => { c.chap = e.target.checked; }));
+      q('.up').addEventListener('click', () => set(() => { cats.splice(i, 1); cats.splice(i - 1, 0, c); }));
+      q('.dn').addEventListener('click', () => set(() => { cats.splice(i, 1); cats.splice(i + 1, 0, c); }));
+      q('.rm').addEventListener('click', () => {
+        const n = dkList(c.id).length; if (!confirm(`Eliminare la categoria «${c.name}»?` + (n ? ` I suoi ${n} brani escono dal deck (restano nelle sessioni già registrate).` : ''))) return;
+        set(() => { if (E.voices[c.id]) stopVoice(c.id); cats.splice(i, 1); delete S.deck[c.id]; delete E.loops[c.id]; delete E.next[c.id]; });
+      });
+      box.append(r);
+    });
+  },
+  add() {
+    if (R.state !== 'idle') return toast('Aggiungi categorie a registrazione ferma');
+    const cats = CATS(), used = cats.map(c => c.color), color = CAT_COLORS.find(c => !used.includes(c)) || CAT_COLORS[cats.length % CAT_COLORS.length];
+    let n = 1; while (cats.some(c => c.name === 'Categoria ' + n)) n++;
+    cats.push({ id: 'c' + Date.now().toString(36), name: 'Categoria ' + n, type: 'list', color, key: '', duck: false, chap: false, cue: '' });
+    this.apply(); toast('Nuova categoria: dalle un nome e scegli come si comporta');
+  },
+  /* Dopo ogni modifica: tasti, deck, mixer, disposizione e segnali del teleprompter si ricostruiscono */
+  apply() {
+    rebuildActions(); normDeck(); for (const ch of allOf()) ensureStrip(ch);
+    DECKUI.build(); LAY.apply(S.settings.layout || 'classico'); ORIENT.apply(); if (ORIENT.onWide) ORIENT.onWide();
+    renderKeys(); renderDeck(); TP.render(); LAY.renderSettings(); this.render();
+    saveSettings(); saveDeck();
+  }
+};
+
 /* Collegamenti */
 function wire() {
+  DECKUI.build();
+  CATUI.render(); $('catAdd').addEventListener('click', () => CATUI.add());
+  $('catReset').addEventListener('click', () => { if (R.state !== 'idle') return toast('A registrazione ferma'); if (!confirm('Tornare alle tre categorie di base (Sigla, Sottofondo, Capitoli)? Le altre categorie e i loro brani escono dal deck.')) return; for (const ch of Object.keys(E.voices)) if (E.voices[ch]) stopVoice(ch); S.settings.cats = DEF_CATS(); E.loops = {}; E.next = {}; CATUI.apply(); });
   $('recBtn').addEventListener('click', () => { if (R.state === 'idle') recStart(); else if (R.state === 'rec') enterHold('pause'); else if (R.state === 'hold') commitHold(); });
   $('retakeBtn').addEventListener('click', () => enterHold('retake'));
   // TERMINA mette subito in pausa (il contatore si ferma) e chiede conferma nel pannello
@@ -3274,22 +3491,6 @@ function wire() {
     if (x > waveCache.used) return;
     listen(waveCache.t0 + x / waveCache.used * waveCache.dur, R.len / E.sr);
   });
-
-  $('introLoad').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia la sigla a registrazione ferma'); $('fileIntro').click(); });
-  $('fileIntro').addEventListener('change', async (e) => { const f = [...e.target.files]; e.target.value = ''; if (!f.length) return; const [id] = await addFiles(f); S.deck.intro = id; saveDeck(); renderDeck(); });
-  $('introPlay').addEventListener('click', introPlay); $('introStop').addEventListener('click', introStop);
-
-  $('bgAdd').addEventListener('click', () => { if (isRec() || blocked()) return toast('Aggiungi brani a registrazione ferma'); $('fileBg').click(); });
-  $('fileBg').addEventListener('change', async (e) => { const f = [...e.target.files]; e.target.value = ''; if (!f.length) return; S.deck.bg.push(...await addFiles(f)); saveDeck(); renderDeck(); });
-  $('bgPlay').addEventListener('click', bgToggle);
-  $('bgNext').addEventListener('click', () => bgJump(E.bg.idx + 1));
-  $('bgPrev').addEventListener('click', () => { const v = E.voices.bg; if (v && posOf(v, now()) > 3) { if (blocked()) return; stopVoice('bg'); E.bg.pos = 0; bgPlay(); renderDeck(); } else bgJump(E.bg.idx - 1); });
-
-  $('capAdd').addEventListener('click', () => { if (isRec() || blocked()) return toast('Aggiungi capitoli a registrazione ferma'); $('fileCap').click(); });
-  $('fileCap').addEventListener('change', async (e) => { const f = [...e.target.files]; e.target.value = ''; if (!f.length) return; S.deck.caps.push(...await addFiles(f)); saveDeck(); renderDeck(); });
-  $('capPlay').addEventListener('click', () => capPlay(E.capIdx));
-  $('capStop').addEventListener('click', capStop);
-  $('capPrev').addEventListener('click', () => { if (blocked()) return; E.capIdx = Math.max(0, E.capIdx - 1); renderDeck(); });
 
   // Teleprompter
   TP.view = $('ptView'); TP.el = $('ptText');
@@ -3532,11 +3733,11 @@ async function recoverSessions() {
   }
 }
 async function loadNames() {
-  const ids = new Set([S.deck.intro, ...S.deck.bg, ...S.deck.caps].filter(Boolean));
+  normDeck();
+  const ids = new Set(deckIds());
   for (const s of await DB.all('sessions')) for (const g of s.segs || []) ids.add(g.fileId);
   for (const id of ids) { const f = await DB.get('files', id); if (f) S.names.set(id, f.name); }
-  S.deck.bg = S.deck.bg.filter(id => S.names.has(id)); S.deck.caps = S.deck.caps.filter(id => S.names.has(id));
-  if (S.deck.intro && !S.names.has(S.deck.intro)) S.deck.intro = null;
+  for (const c of CATS()) { const v = S.deck[c.id]; if (Array.isArray(v)) S.deck[c.id] = v.filter(id => S.names.has(id)); else if (v && !S.names.has(v)) S.deck[c.id] = null; }
 }
 /* App installabile e uso senza internet */
 let installEvt = null;
@@ -3585,6 +3786,8 @@ async function boot() {
         Object.assign(S.mutes, st.mutes || {});
       }
       const se = await DB.get('state', 'settings'); if (se) { const vd = S.settings.video, od = S.settings.ov, pd = S.settings.plat; Object.assign(S.settings, se); S.settings.video = { ...vd, ...(se.video || {}) }; S.settings.ov = { ...od, ...(se.ov || {}) }; S.settings.plat = { sp: { ...pd.sp, ...((se.plat || {}).sp || {}) }, yt: { ...pd.yt, ...((se.plat || {}).yt || {}) } }; if (se.keys) { const ks = { ...DEF_KEYS, ...se.keys }; if (ks.tpUp === 'ArrowUp' && ks.tpDown === 'ArrowDown') { ks.tpUp = 'Shift+ArrowUp'; ks.tpDown = 'Shift+ArrowDown'; ks.tpBack = 'ArrowUp'; ks.tpFwd = 'ArrowDown'; } S.settings.keys = ks; } }
+      // le categorie sono nelle impostazioni: livelli e tasti si sistemano dopo averle lette
+      rebuildActions(); if (st) { S.mix = normMix(st.mix || st.levels); if (st.defaults) S.defaults = normMix(st.defaults); }
       await TP.load(); await SYNC.load();
     } catch (e) { console.warn(e); }
     await loadNames();
