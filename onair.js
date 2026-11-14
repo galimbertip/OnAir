@@ -3,9 +3,26 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.0.0' };
+const APP = { name: 'GPverse OnAir', version: '3.3.0' };
 
 const CHANGELOG = [
+  { v: '3.3.0', date: '14/11/2026', title: 'Green screen virtuale e sfondi dietro di te', items: [
+    'Green screen virtuale: «🎬 Registra la scena vuota», esci dall\'inquadratura per qualche secondo e OnAir memorizza la stanza. Poi si vede solo ciò che è nuovo: tu, un ospite, un oggetto.',
+    'Sensibilità regolabile; esposizione, bilanciamento del bianco e messa a fuoco della webcam vengono bloccati se la webcam lo permette.',
+    'Sfondo anche dietro di te (con green screen a colore o virtuale): nero, sfocato, immagine oppure video in loop caricato da te.',
+    'La scena vuota resta salvata su questo dispositivo: la rifai solo se sposti la webcam o cambia la luce.'
+  ] },
+  { v: '3.2.0', date: '14/11/2026', title: 'Impostazioni sincronizzate tra i tuoi dispositivi', items: [
+    'Sincronizzazione tramite un tuo repository GitHub privato: carichi le impostazioni da un PC e le ritrovi sull\'altro.',
+    'Scegli cosa sincronizzare: testo e sigla/brani, livelli del mixer, video e sovrimpressioni, disposizioni e tasti, piattaforme.',
+    'All\'avvio OnAir ti avvisa se sull\'altro dispositivo ci sono impostazioni più recenti; invio automatico facoltativo dopo le modifiche.',
+    'Il token resta solo su questo dispositivo, non finisce mai nei file .onair né nella sincronizzazione.'
+  ] },
+  { v: '3.1.0', date: '14/11/2026', title: 'Vista orizzontale per monitor 16:9', items: [
+    'Nuova vista orizzontale: in registrazione tutto sta in uno schermo 16:9 senza scorrere (video, mixer, teleprompter e comandi affiancati).',
+    'Anche il montaggio è orizzontale: timeline larga, anteprima video ed esportazione di lato, tracce più alte.',
+    'Impostazioni → Vista: automatica (orizzontale su schermi larghi), sempre orizzontale o sempre verticale; scegli dove mettere il video.'
+  ] },
   { v: '3.0.0', date: '08/11/2026', title: 'Montaggio, mixer console e nuovi colori', items: [
     'Montaggio: timeline a tracce (voce con forma d\'onda, sigla, sottofondo, capitoli) con righello, cursore, zoom, scorrimento e annulla/ripristina.',
     'Blocchi musicali: spostali, accorciali dai bordi, dividili al cursore, eliminali; per ognuno volume e dissolvenze in entrata e in uscita.',
@@ -199,11 +216,11 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { mixStyle: 'console', channel: '', ov: { bg: 'none', logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09 } },
+  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.12 } },
   names: new Map()
 };
-async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); }
-async function saveSettings() { await DB.put('state', 'settings', S.settings); }
+async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); SYNC.changed(); }
+async function saveSettings() { await DB.put('state', 'settings', S.settings); SYNC.changed(); }
 
 /* ------------------------------------------------------------------ Motore */
 const E = {
@@ -979,7 +996,9 @@ uniform vec4 u_mask; uniform vec4 u_view; uniform float u_key; uniform vec2 u_kc
 float rnd(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
 vec2 cbcr(vec3 c){ return vec2(-0.1687*c.r - 0.3313*c.g + 0.5*c.b, 0.5*c.r - 0.4187*c.g - 0.0813*c.b); }
 float keyA(vec3 c){ if (u_key < 0.5) return 1.0; if (u_kmode > 0.5) return smoothstep(u_tol * 2.2, u_tol * 2.2 + 0.1, distance(c, u_krgb)); return smoothstep(u_tol, u_tol + 0.06, distance(cbcr(c), u_kc)); }
-float lum(vec2 uv){ vec3 c = texture2D(u_tex, uv).rgb; return dot(c, vec3(0.299,0.587,0.114)) * keyA(c); }
+uniform sampler2D u_mtex; uniform float u_usemask;
+float alphaAt(vec2 uv){ return u_usemask > 0.5 ? texture2D(u_mtex, uv).r : 1.0; }
+float lum(vec2 uv){ vec3 c = texture2D(u_tex, uv).rgb; return dot(c, vec3(0.299,0.587,0.114)) * alphaAt(uv); }
 vec2 toFrame(vec2 uv){ return u_view.xy + vec2(uv.x, 1.0 - uv.y) * (u_view.zw - u_view.xy); }
 float inMask(vec2 f){ return step(u_mask.x, f.x) * step(f.x, u_mask.z) * step(u_mask.y, f.y) * step(f.y, u_mask.w); }
 vec2 toCam(vec2 f){ vec2 c = vec2(u_mirror > 0.5 ? 1.0 - f.x : f.x, 1.0 - f.y); return c * u_scale + u_off; }
@@ -993,8 +1012,9 @@ float edge(vec2 uv){
 }
 void main(){
   if (u_fx < 0.5 && u_has > 0.5) {
-    vec2 f0 = toFrame(v_uv); vec3 c0 = texture2D(u_tex, toCam(f0)).rgb;
-    gl_FragColor = vec4(c0 * keyA(c0) * inMask(f0), 1.0); return;
+    vec2 f0 = toFrame(v_uv); vec2 cu0 = toCam(f0); vec3 c0 = texture2D(u_tex, cu0).rgb; float im0 = inMask(f0);
+    float a0 = im0 > 0.5 ? alphaAt(cu0) : 1.0;
+    gl_FragColor = vec4(c0 * a0 * im0, a0); return;
   }
   vec2 uv = v_uv;
   float tt = floor(u_time*12.0);
@@ -1014,7 +1034,12 @@ void main(){
     col = u_col * m;
     col = max(col, vec3(1.0, 0.15, 0.3) * mr * 0.55 * u_gl);
     col = max(col, vec3(0.2, 0.9, 1.0) * mb * 0.45 * u_gl);
-    col *= inMask(f);
+    float im = inMask(f);
+    col *= im;
+    float aa = im > 0.5 ? max(alphaAt(cuv), m) : 1.0;
+    col *= 0.86 + 0.14 * sin(v_uv.y * u_res.y * 3.14159);
+    col += (rnd(v_uv * (u_time + 1.0)) - 0.5) * 0.07 * u_gl * aa;
+    gl_FragColor = vec4(clamp(col, vec3(0.0), vec3(aa)), aa); return;
   } else {
     float n = rnd(floor(v_uv * vec2(160.0, 90.0)) + tt);
     col = vec3(n * 0.12) + u_col * step(0.985, rnd(vec2(band, tt))) * 0.5;
@@ -1022,6 +1047,30 @@ void main(){
   col *= 0.86 + 0.14 * sin(v_uv.y * u_res.y * 3.14159);
   col += (rnd(v_uv * (u_time + 1.0)) - 0.5) * 0.07 * u_gl;
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+const MFRAG = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_tex; uniform sampler2D u_bgt; uniform vec2 u_px;
+uniform float u_key; uniform float u_kmode; uniform float u_tol; uniform vec2 u_kc; uniform vec3 u_krgb; uniform float u_vbg; uniform float u_vtol;
+vec2 cbcr(vec3 c){ return vec2(-0.1687*c.r - 0.3313*c.g + 0.5*c.b, 0.5*c.r - 0.4187*c.g - 0.0813*c.b); }
+void main(){
+  float a = 1.0;
+  if (u_key > 0.5) {
+    vec3 c = texture2D(u_tex, v_uv).rgb;
+    if (u_kmode > 0.5) a *= smoothstep(u_tol * 2.2, u_tol * 2.2 + 0.1, distance(c, u_krgb));
+    else a *= smoothstep(u_tol, u_tol + 0.06, distance(cbcr(c), u_kc));
+  }
+  if (u_vbg > 0.5) {
+    float acc = 0.0;
+    for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
+      vec2 o = vec2(float(i), float(j)) * u_px * 3.0;
+      acc += length(texture2D(u_tex, v_uv + o).rgb - texture2D(u_bgt, v_uv + o).rgb);
+    }
+    acc = acc / 9.0 / 1.732;
+    a *= smoothstep(u_vtol, u_vtol + 0.07, acc);
+  }
+  gl_FragColor = vec4(a, a, a, 1.0);
 }`;
 const VERT = `attribute vec2 p; varying vec2 v_uv; void main(){ v_uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
 /* Inquadratura: area tenuta (mask), eventuale ingrandimento (view) e colore del green screen */
@@ -1033,7 +1082,7 @@ function frameGeom() {
     const cx = (m[0] + m[2]) / 2, cy = (m[1] + m[3]) / 2, k = Math.min(1 / (m[2] - m[0]), 1 / (m[3] - m[1]));
     view = [cx - 0.5 / k, cy - 0.5 / k, cx + 0.5 / k, cy + 0.5 / k];
   }
-  return { mask: m, view, key: !!vs.key && ed !== 'pick' };
+  return { mask: m, view, key: !!vs.key && ed !== 'pick', vbg: !!vs.vbg && !!CAM.bgCanvas && ed !== 'pick' && ed !== 'scene' };
 }
 const hexRgb = (c) => [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255];
 const isNeutral = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b) < 0.16;
@@ -1047,7 +1096,7 @@ const C2D = {
     this.edge = document.createElement('canvas'); this.edge.width = this.sw; this.edge.height = this.sh; this.eg = this.edge.getContext('2d');
     this.img = this.eg.createImageData(this.sw, this.sh); this.lum = new Float32Array(this.sw * this.sh);
   },
-  crop(video, ca) { const vw = video.videoWidth, vh = video.videoHeight, va = vw / vh; return va > ca ? [(vw - vh * ca) / 2, 0, vh * ca, vh] : [0, (vh - vw / ca) / 2, vw, vw / ca]; },
+  crop(video, ca) { const vw = video.videoWidth || video.width, vh = video.videoHeight || video.height, va = vw / vh; return va > ca ? [(vw - vh * ca) / 2, 0, vh * ca, vh] : [0, (vh - vw / ca) / 2, vw, vw / ca]; },
   /* Disegna nel canvas (dw×dh) la porzione "view" dell'inquadratura, a specchio se serve */
   drawView(ctx, video, dw, dh, view, mirror) {
     const [cx, cy, cw, ch] = this.crop(video, 16 / 9);
@@ -1062,32 +1111,60 @@ const C2D = {
     const x0 = X(mask[0]), x1 = X(mask[2]), y0 = Y(mask[1]), y1 = Y(mask[3]);
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, dw, Math.max(0, y0)); ctx.fillRect(0, y1, dw, dh - y1); ctx.fillRect(0, y0, Math.max(0, x0), y1 - y0); ctx.fillRect(x1, y0, dw - x1, y1 - y0);
   },
+  /* Maschera "cosa resta" (1 = tieni, 0 = togli): green screen a colore e/o scena vuota registrata */
+  alphaMask(d, fg, vs) {
+    const n = this.sw * this.sh; if (!this.A || this.A.length !== n) { this.A = new Float32Array(n); this.D = new Float32Array(n); }
+    const A = this.A; A.fill(1);
+    if (fg.key) {
+      const krgb = hexRgb(vs.kc || '#33b34d'), neutral = isNeutral(krgb), kk = cbcrOf(krgb), tol = vs.tol ?? 0.09, nt = tol * 2.2;
+      for (let i = 0, j = 0; i < n; i++, j += 4) {
+        const r = d[j] / 255, gg = d[j + 1] / 255, b = d[j + 2] / 255; let a;
+        if (neutral) { const dr = r - krgb[0], dg = gg - krgb[1], db = b - krgb[2]; const dd = Math.sqrt(dr * dr + dg * dg + db * db); a = dd <= nt ? 0 : dd >= nt + 0.1 ? 1 : (dd - nt) / 0.1; }
+        else { const cbv = -0.1687 * r - 0.3313 * gg + 0.5 * b - kk[0], crv = 0.5 * r - 0.4187 * gg - 0.0813 * b - kk[1]; const dd = Math.sqrt(cbv * cbv + crv * crv); a = dd <= tol ? 0 : dd >= tol + 0.06 ? 1 : (dd - tol) / 0.06; }
+        A[i] = a;
+      }
+    }
+    if (fg.vbg) {
+      const sw = this.sw, sh = this.sh, key = fg.view.join(',') + '|' + vs.mirror + '|' + CAM.bgStamp;
+      if (this.bgKey !== key) { const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g2 = c.getContext('2d', { willReadFrequently: true }); this.drawView(g2, CAM.bgCanvas, sw, sh, fg.view, vs.mirror); this.bgData = g2.getImageData(0, 0, sw, sh).data; this.bgKey = key; }
+      const B = this.bgData, D = this.D, vt = vs.vtol ?? 0.12;
+      for (let i = 0, j = 0; i < n; i++, j += 4) { const dr = d[j] - B[j], dg = d[j + 1] - B[j + 1], db = d[j + 2] - B[j + 2]; D[i] = Math.sqrt(dr * dr + dg * dg + db * db) / 441; }
+      for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) {
+        const i = y * sw + x; const v = (D[i - sw - 1] + D[i - sw] + D[i - sw + 1] + D[i - 1] + D[i] + D[i + 1] + D[i + sw - 1] + D[i + sw] + D[i + sw + 1]) / 9;
+        const a = v <= vt ? 0 : v >= vt + 0.07 ? 1 : (v - vt) / 0.07; A[i] *= a;
+      }
+    }
+    return A;
+  },
   render(t, video, has, fresh, vs) {
     const g = this.g, W = this.cv.width, H = this.cv.height, sw = this.sw, sh = this.sh;
-    const fg = frameGeom();
-    if (has && vs.fx === false) { this.drawView(g, video, W, H, fg.view, vs.mirror); this.maskOut(g, W, H, fg.view, fg.mask); return; }
+    const fg = frameGeom(), keyed = fg.key || fg.vbg;
+    if (has && vs.fx === false) {
+      g.clearRect(0, 0, W, H); this.drawView(g, video, W, H, fg.view, vs.mirror);
+      if (keyed) {
+        this.drawView(this.sg, video, sw, sh, fg.view, vs.mirror); const A = this.alphaMask(this.sg.getImageData(0, 0, sw, sh).data, fg, vs);
+        if (!this.mimg) { this.mc = document.createElement('canvas'); this.mc.width = sw; this.mc.height = sh; this.mg = this.mc.getContext('2d'); this.mimg = this.mg.createImageData(sw, sh); }
+        const o = this.mimg.data; for (let i = 0, k = 0; i < A.length; i++, k += 4) { o[k] = o[k + 1] = o[k + 2] = 255; o[k + 3] = A[i] * 255; }
+        this.mg.putImageData(this.mimg, 0, 0); g.save(); g.globalCompositeOperation = 'destination-in'; g.imageSmoothingEnabled = true; g.drawImage(this.mc, 0, 0, W, H); g.restore();
+      }
+      this.maskOut(g, W, H, fg.view, fg.mask); return;
+    }
     const c = vs.col, cr = parseInt(c.slice(1, 3), 16), cg = parseInt(c.slice(3, 5), 16), cb = parseInt(c.slice(5, 7), 16);
     const tt = Math.floor(t / 1000 * 12), gl = vs.gl;
     if (has && fresh) {
       this.drawView(this.sg, video, sw, sh, fg.view, vs.mirror);
       const d = this.sg.getImageData(0, 0, sw, sh).data, L = this.lum, o = this.img.data;
-      const krgb = hexRgb(vs.kc || '#33b34d'), neutral = isNeutral(krgb), kk = fg.key ? cbcrOf(krgb) : null, tol = vs.tol ?? 0.09, nt = tol * 2.2;
-      for (let i = 0, j = 0; i < L.length; i++, j += 4) {
-        const r = d[j] / 255, gg = d[j + 1] / 255, b = d[j + 2] / 255;
-        let a = 1;
-        if (kk && neutral) { const dr = r - krgb[0], dg = gg - krgb[1], db = b - krgb[2]; const dd = Math.sqrt(dr * dr + dg * dg + db * db); a = dd <= nt ? 0 : dd >= nt + 0.1 ? 1 : (dd - nt) / 0.1; }
-        else if (kk) { const cbv = -0.1687 * r - 0.3313 * gg + 0.5 * b - kk[0], crv = 0.5 * r - 0.4187 * gg - 0.0813 * b - kk[1]; const dd = Math.sqrt(cbv * cbv + crv * crv); a = dd <= tol ? 0 : dd >= tol + 0.06 ? 1 : (dd - tol) / 0.06; }
-        L[i] = (r * 0.299 + gg * 0.587 + b * 0.114) * a;
-      }
+      const A = keyed ? this.alphaMask(d, fg, vs) : null;
+      for (let i = 0, j = 0; i < L.length; i++, j += 4) L[i] = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) / 255 * (A ? A[i] : 1);
       const lo = vs.thr * 0.85, hi = lo + 0.14;
       for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
-        const k = (yy * sw + xx) * 4;
-        if (xx === 0 || yy === 0 || xx === sw - 1 || yy === sh - 1) { o[k] = o[k + 1] = o[k + 2] = 0; o[k + 3] = 255; continue; }
-        const i = yy * sw + xx;
+        const k = (yy * sw + xx) * 4, i = yy * sw + xx;
+        if (xx === 0 || yy === 0 || xx === sw - 1 || yy === sh - 1) { o[k] = o[k + 1] = o[k + 2] = 0; o[k + 3] = A ? A[i] * 255 : 255; continue; }
         const tl = L[i - sw - 1], tp = L[i - sw], tr = L[i - sw + 1], l = L[i - 1], r = L[i + 1], bl = L[i + sw - 1], bt = L[i + sw], br = L[i + sw + 1];
         const gx = -tl - 2 * l - bl + tr + 2 * r + br, gy = -bl - 2 * bt - br + tl + 2 * tp + tr;
         let m = (Math.sqrt(gx * gx + gy * gy) - lo) / (hi - lo); m = m < 0 ? 0 : m > 1 ? 1 : m;
-        o[k] = cr * m; o[k + 1] = cg * m; o[k + 2] = cb * m; o[k + 3] = 255;
+        const a = A ? Math.max(A[i], m) : 1;
+        o[k] = a > 0 ? cr * m / a : 0; o[k + 1] = a > 0 ? cg * m / a : 0; o[k + 2] = a > 0 ? cb * m / a : 0; o[k + 3] = a * 255;
       }
       this.eg.putImageData(this.img, 0, 0);
       this.maskOut(this.eg, sw, sh, fg.view, fg.mask);
@@ -1095,7 +1172,7 @@ const C2D = {
       const o = this.img.data; for (let k = 0; k < o.length; k += 4) { const n = Math.random() * 30; o[k] = o[k + 1] = o[k + 2] = n; o[k + 3] = 255; }
       this.eg.putImageData(this.img, 0, 0);
     }
-    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    g.clearRect(0, 0, W, H);
     g.imageSmoothingEnabled = true;
     const bands = 36, bh = H / bands, sbh = sh / bands, jolt = hash2(tt, 37) > 0.965 ? gl : 0;
     for (let b = 0; b < bands; b++) {
@@ -1103,8 +1180,10 @@ const C2D = {
       shift += jolt * (hash2(b * 3, tt) - 0.5) * 0.05 * W;
       g.drawImage(this.edge, 0, b * sbh, sw, sbh, shift, b * bh, W, bh + 1);
     }
+    g.save(); g.globalCompositeOperation = 'source-atop';
     if (gl > 0.01) { g.globalAlpha = 0.07 * gl; g.fillStyle = '#fff'; for (let k = 0; k < 40; k++) g.fillRect(Math.random() * W, Math.random() * H, 2, 2); g.globalAlpha = 1; }
     g.fillStyle = 'rgba(0,0,0,0.14)'; for (let yy = 0; yy < H; yy += 4) g.fillRect(0, yy, W, 1);
+    g.restore();
   }
 };
 const CAM = {
@@ -1130,7 +1209,16 @@ const CAM = {
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-    for (const n of ['u_tex', 'u_px', 'u_scale', 'u_off', 'u_res', 'u_time', 'u_thr', 'u_gl', 'u_mirror', 'u_has', 'u_col', 'u_fx', 'u_mask', 'u_view', 'u_key', 'u_kc', 'u_tol', 'u_kmode', 'u_krgb']) this.u[n] = gl.getUniformLocation(p, n);
+    for (const n of ['u_tex', 'u_px', 'u_scale', 'u_off', 'u_res', 'u_time', 'u_thr', 'u_gl', 'u_mirror', 'u_has', 'u_col', 'u_fx', 'u_mask', 'u_view', 'u_mtex', 'u_usemask']) this.u[n] = gl.getUniformLocation(p, n);
+    gl.uniform1i(this.u.u_tex, 0); gl.uniform1i(this.u.u_mtex, 1);
+    // Secondo passaggio: maschera "cosa resta" (green screen e scena vuota) a bassa risoluzione, poi letta sfumata
+    const mp = gl.createProgram(); gl.attachShader(mp, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(mp, sh(gl.FRAGMENT_SHADER, MFRAG)); gl.linkProgram(mp); this.mprog = mp; this.mu = {};
+    for (const n of ['u_tex', 'u_bgt', 'u_px', 'u_key', 'u_kmode', 'u_tol', 'u_kc', 'u_krgb', 'u_vbg', 'u_vtol']) this.mu[n] = gl.getUniformLocation(mp, n);
+    gl.useProgram(mp); gl.uniform1i(this.mu.u_tex, 0); gl.uniform1i(this.mu.u_bgt, 2); gl.useProgram(p);
+    const mkTex = (w, h) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); return t; };
+    this.MW = 480; this.MH = 270; this.mtex = mkTex(this.MW, this.MH); this.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.mtex, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.bgtex = mkTex(1, 1); this.ploc = loc; this.mploc = gl.getAttribLocation(mp, 'p');
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
     this.resize();
     try { const dbg = gl.getExtension('WEBGL_debug_renderer_info'); const rn = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : ''; this.soft = /swiftshader|llvmpipe|software/i.test(rn); this.renderer = rn; } catch (e) {}
     if (this.soft) { const w = $('vWarn'); w.hidden = false; w.textContent = 'Il browser sta disegnando il video senza la scheda grafica: può andare a scatti. In Chrome attiva Impostazioni → Sistema → «Usa l\'accelerazione grafica», poi riavvia. Intanto usa 540p.'; }
@@ -1148,11 +1236,45 @@ const CAM = {
       tr.onended = () => { this.ok = false; this.lost = true; renderStatus(); toast('Webcam persa! Apri Dispositivi e premi ↻ Ricarica elenco'); if (!$('devModal').hidden) DEV.refresh(); };
       this.video.srcObject = this.stream; await this.video.play();
       this.ok = true; this.err = null; this.lost = false; this.fresh = true;
+      if (S.settings.video.vbg && this.bgCanvas) this.lockCamera();
       if (this.video.requestVideoFrameCallback) { const v = this.video; const cb = () => { if (v.srcObject !== this.stream) return; this.fresh = true; this.camFrames++; v.requestVideoFrameCallback(cb); }; v.requestVideoFrameCallback(cb); this.rvfc = true; }
     } catch (e) { console.warn('Webcam', e); this.ok = false; this.err = e; }
     renderStatus();
   },
   stop() { if (this.stream) { this.stream.getTracks().forEach(t => { t.onended = null; t.stop(); }); this.stream = null; } this.ok = false; },
+  /* Green screen virtuale: registra la scena vuota (media di ~20 fotogrammi) */
+  async captureScene(onTick) {
+    const v = this.video, W = v.videoWidth, H = v.videoHeight; if (!W) throw new Error('webcam non attiva');
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d', { willReadFrequently: true });
+    const N = 20, acc = new Float32Array(W * H * 3);
+    for (let f = 0; f < N; f++) {
+      await new Promise(r => setTimeout(r, 70)); g.drawImage(v, 0, 0, W, H); const d = g.getImageData(0, 0, W, H).data;
+      for (let i = 0, j = 0; i < acc.length; i += 3, j += 4) { acc[i] += d[j]; acc[i + 1] += d[j + 1]; acc[i + 2] += d[j + 2]; }
+      onTick && onTick((f + 1) / N);
+    }
+    const out = g.createImageData(W, H); for (let i = 0, j = 0; i < acc.length; i += 3, j += 4) { out.data[j] = acc[i] / N; out.data[j + 1] = acc[i + 1] / N; out.data[j + 2] = acc[i + 2] / N; out.data[j + 3] = 255; }
+    g.putImageData(out, 0, 0); this.setScene(c, Date.now());
+    c.toBlob((b) => { if (b) DB.put('files', 'vbg-scene', { name: 'scena vuota', type: 'image/png', blob: b, t: this.bgStamp }); }, 'image/png');
+  },
+  setScene(canvas, stamp) {
+    this.bgCanvas = canvas; this.bgStamp = stamp;
+    if (this.gl) { const gl = this.gl; gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.bgtex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex); }
+  },
+  async loadScene() {
+    const f = await DB.get('files', 'vbg-scene'); if (!f) return;
+    try { const bm = await createImageBitmap(f.blob); const c = document.createElement('canvas'); c.width = bm.width; c.height = bm.height; c.getContext('2d').drawImage(bm, 0, 0); this.setScene(c, f.t || Date.now()); } catch (e) { console.warn(e); }
+  },
+  /* Blocca esposizione, bilanciamento del bianco e messa a fuoco, se la webcam lo permette */
+  async lockCamera() {
+    const tr = this.stream && this.stream.getVideoTracks()[0]; if (!tr || !tr.getCapabilities) return 'non so se la webcam regola la luce da sola';
+    const caps = tr.getCapabilities(), adv = {}, done = [];
+    if ((caps.exposureMode || []).includes('manual')) { adv.exposureMode = 'manual'; done.push('esposizione'); }
+    if ((caps.whiteBalanceMode || []).includes('manual')) { adv.whiteBalanceMode = 'manual'; done.push('bilanciamento del bianco'); }
+    if ((caps.focusMode || []).includes('manual')) { adv.focusMode = 'manual'; done.push('messa a fuoco'); }
+    if (!done.length) return 'la webcam non permette di bloccare l\'esposizione: tieni la luce costante';
+    try { await tr.applyConstraints({ advanced: [adv] }); return 'bloccati: ' + done.join(', '); } catch (e) { return 'non sono riuscito a bloccare l\'esposizione: tieni la luce costante'; }
+  },
+  async unlockCamera() { const tr = this.stream && this.stream.getVideoTracks()[0]; if (!tr || !tr.getCapabilities) return; const caps = tr.getCapabilities(), adv = {}; if ((caps.exposureMode || []).includes('continuous')) adv.exposureMode = 'continuous'; if ((caps.whiteBalanceMode || []).includes('continuous')) adv.whiteBalanceMode = 'continuous'; if ((caps.focusMode || []).includes('continuous')) adv.focusMode = 'continuous'; try { await tr.applyConstraints({ advanced: [adv] }); } catch (e) {} },
   sampleAt(fx, fy) {
     if (!this.ok || !this.video.videoWidth) return null;
     const v = this.video, c = document.createElement('canvas'); c.width = 160; c.height = 90; const g = c.getContext('2d', { willReadFrequently: true });
@@ -1179,12 +1301,28 @@ const CAM = {
       if (va > ca) sx = ca / va; else sy = va / ca;
       gl.uniform2f(this.u.u_px, 1 / this.video.videoWidth, 1 / this.video.videoHeight);
     }
+    const fg0 = frameGeom(), useMask = has && (fg0.key || fg0.vbg);
+    if (useMask) {
+      const rgb = hexRgb(vs.kc || '#33b34d'), kc = cbcrOf(rgb);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null); gl.activeTexture(gl.TEXTURE0);
+      gl.useProgram(this.mprog); gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo); gl.viewport(0, 0, this.MW, this.MH);
+      gl.enableVertexAttribArray(this.mploc); gl.vertexAttribPointer(this.mploc, 2, gl.FLOAT, false, 0, 0);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.bgtex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
+      gl.uniform2f(this.mu.u_px, 1 / this.video.videoWidth, 1 / this.video.videoHeight);
+      gl.uniform1f(this.mu.u_key, fg0.key ? 1 : 0); gl.uniform1f(this.mu.u_kmode, isNeutral(rgb) ? 1 : 0); gl.uniform1f(this.mu.u_tol, vs.tol ?? 0.09); gl.uniform2f(this.mu.u_kc, kc[0], kc[1]); gl.uniform3f(this.mu.u_krgb, rgb[0], rgb[1], rgb[2]);
+      gl.uniform1f(this.mu.u_vbg, fg0.vbg ? 1 : 0); gl.uniform1f(this.mu.u_vtol, vs.vtol ?? 0.12);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(this.prog);
+      gl.enableVertexAttribArray(this.ploc); gl.vertexAttribPointer(this.ploc, 2, gl.FLOAT, false, 0, 0);
+    }
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.mtex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.uniform1f(this.u.u_usemask, useMask ? 1 : 0);
     gl.uniform2f(this.u.u_scale, sx, sy); gl.uniform2f(this.u.u_off, (1 - sx) / 2, (1 - sy) / 2);
     gl.uniform2f(this.u.u_res, W, H); gl.uniform1f(this.u.u_time, t / 1000);
     gl.uniform1f(this.u.u_thr, vs.thr); gl.uniform1f(this.u.u_gl, vs.gl); gl.uniform1f(this.u.u_mirror, vs.mirror ? 1 : 0); gl.uniform1f(this.u.u_has, has ? 1 : 0); gl.uniform1f(this.u.u_fx, vs.fx === false ? 0 : 1);
-    { const fg = frameGeom(); gl.uniform4f(this.u.u_mask, ...fg.mask); gl.uniform4f(this.u.u_view, ...fg.view); gl.uniform1f(this.u.u_key, fg.key ? 1 : 0);
-      const rgb = hexRgb(vs.kc || '#33b34d'), kc = cbcrOf(rgb); gl.uniform2f(this.u.u_kc, kc[0], kc[1]); gl.uniform1f(this.u.u_tol, vs.tol ?? 0.09); gl.uniform1f(this.u.u_kmode, isNeutral(rgb) ? 1 : 0); gl.uniform3f(this.u.u_krgb, rgb[0], rgb[1], rgb[2]); }
+    gl.uniform4f(this.u.u_mask, ...fg0.mask); gl.uniform4f(this.u.u_view, ...fg0.view);
     const c = vs.col; gl.uniform3f(this.u.u_col, parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   },
   status() {
@@ -1214,6 +1352,8 @@ const OUT = {
       const f = await DB.get('files', id);
       if (f) { const img = new Image(); img.src = URL.createObjectURL(f.blob); try { await img.decode(); this[k] = img; } catch (e) { this[k] = null; } if (k === 'bg' && $('ovBgName')) $('ovBgName').textContent = f.name; }
     }
+    const fv = await DB.get('files', 'ov-bgv');
+    if (fv) { if (this.bgv) { this.bgv.pause(); URL.revokeObjectURL(this.bgv.src); } const v = document.createElement('video'); v.muted = true; v.loop = true; v.playsInline = true; v.src = URL.createObjectURL(fv.blob); v.play().catch(() => {}); this.bgv = v; if ($('ovBgvName')) $('ovBgvName').textContent = fv.name; }
   },
   region() {
     const fg = frameGeom(), v = fg.view, m = fg.mask;
@@ -1221,28 +1361,43 @@ const OUT = {
     const r = [X(Math.max(0, m[0])), Y(Math.max(0, m[1])), X(Math.min(1, m[2])), Y(Math.min(1, m[3]))].map(x => Math.max(0, Math.min(1, x)));
     return r;
   },
+  /* Disegna lo sfondo scelto (sfocato, immagine o video) su tutta l'uscita */
+  drawBg(g, W, H, src, r) {
+    const ov = S.settings.ov;
+    if (ov.bg === 'blur') {
+      const rx = r[0] * W, ry = r[1] * H, rw = Math.max(4, (r[2] - r[0]) * W), rh = Math.max(4, (r[3] - r[1]) * H);
+      const ca = 16 / 9, ra = rw / rh; let sx = rx, sy = ry, sw = rw, sh = rh;
+      if (ra > ca) { sw = rh * ca; sx = rx + (rw - sw) / 2; } else { sh = rw / ca; sy = ry + (rh - sh) / 2; }
+      const fg = frameGeom(), raw = (fg.vbg || fg.key) ? null : src;
+      this.bg2.imageSmoothingEnabled = true; this.bg2.fillStyle = '#000'; this.bg2.fillRect(0, 0, 48, 27);
+      if (raw) this.bg2.drawImage(raw, sx / W * raw.width, sy / H * raw.height, sw / W * raw.width, sh / H * raw.height, 0, 0, 48, 27);
+      else if (fg.vbg) C2D.drawView(this.bg2, CAM.bgCanvas, 48, 27, fg.view, S.settings.video.mirror);
+      else if (CAM.video && CAM.video.videoWidth) C2D.drawView(this.bg2, CAM.video, 48, 27, fg.view, S.settings.video.mirror);
+      this.bg3.imageSmoothingEnabled = true; this.bg3.drawImage(this.blur, 0, 0, 16, 9);
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(this.blur2, 0, 0, W, H);
+      g.globalAlpha = 0.5; g.drawImage(this.blur, 0, 0, W, H); g.globalAlpha = 1;
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 0, W, H); return;
+    }
+    const m = ov.bg === 'image' ? this.bg : ov.bg === 'video' && this.bgv && this.bgv.readyState >= 2 ? this.bgv : null;
+    if (!m) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); return; }
+    const iw = m.naturalWidth || m.videoWidth, ih = m.naturalHeight || m.videoHeight, s2 = Math.max(W / iw, H / ih);
+    g.drawImage(m, (W - iw * s2) / 2, (H - ih * s2) / 2, iw * s2, ih * s2);
+  },
   render(t) {
-    const g = this.g, W = this.cv.width, H = this.cv.height, src = CAM.canvas, ov = S.settings.ov;
+    const g = this.g, W = this.cv.width, H = this.cv.height, src = CAM.canvas, ov = S.settings.ov, fg = frameGeom();
+    const keyed = fg.key || fg.vbg, behind = keyed && ov.behind !== false && ov.bg !== 'none' && !CAM.edit;
     const r = this.region(), full = CAM.edit || ov.bg === 'none' || (r[0] < 0.002 && r[1] < 0.002 && r[2] > 0.998 && r[3] > 0.998);
     // Se non c'è niente da sovrapporre si mostra direttamente la webcam elaborata (più leggero)
-    const pass = full && !(ov.logoOn && this.logo) && !this.sub;
+    const pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub;
     if (pass !== this.pass) { this.pass = pass; src.style.display = pass ? 'block' : 'none'; this.cv.style.display = pass ? 'none' : 'block'; }
     if (pass) return;
-    if (full) g.drawImage(src, 0, 0, W, H);
+    if (ov.bg === 'video' && this.bgv && this.bgv.paused) this.bgv.play().catch(() => {});
+    if (behind) { this.drawBg(g, W, H, src, r); g.drawImage(src, 0, 0, W, H); }
+    else if (full) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.drawImage(src, 0, 0, W, H); }
     else {
       const rx = r[0] * W, ry = r[1] * H, rw = (r[2] - r[0]) * W, rh = (r[3] - r[1]) * H;
-      if (ov.bg === 'blur' && rw > 4 && rh > 4) {
-        const ca = 16 / 9, ra = rw / rh; let sx = rx, sy = ry, sw = rw, sh = rh;
-        if (ra > ca) { sw = rh * ca; sx = rx + (rw - sw) / 2; } else { sh = rw / ca; sy = ry + (rh - sh) / 2; }
-        this.bg2.imageSmoothingEnabled = true; this.bg2.drawImage(src, sx, sy, sw, sh, 0, 0, 48, 27);
-        this.bg3.imageSmoothingEnabled = true; this.bg3.drawImage(this.blur, 0, 0, 16, 9);
-        g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(this.blur2, 0, 0, W, H);
-        g.globalAlpha = 0.5; g.drawImage(this.blur, 0, 0, W, H); g.globalAlpha = 1;
-        g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 0, W, H);
-      } else if (ov.bg === 'image' && this.bg) {
-        const iw = this.bg.naturalWidth, ih = this.bg.naturalHeight, s2 = Math.max(W / iw, H / ih);
-        g.drawImage(this.bg, (W - iw * s2) / 2, (H - ih * s2) / 2, iw * s2, ih * s2);
-      } else { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); }
+      this.drawBg(g, W, H, src, r);
+      g.fillStyle = '#000'; g.fillRect(rx, ry, rw, rh);
       g.drawImage(src, rx / W * src.width, ry / H * src.height, rw / W * src.width, rh / H * src.height, rx, ry, rw, rh);
     }
     if (ov.logoOn && this.logo) {
@@ -1525,7 +1680,7 @@ const TP = {
     const st = await DB.get('state', 'prompter');
     if (st) for (const k of ['text', 'speed', 'size', 'mirror', 'auto', 'visible', 'startMode']) if (k in st) this[k] = st[k];
   },
-  save() { const { text, speed, size, mirror, auto, visible, startMode } = this; DB.put('state', 'prompter', { text, speed, size, mirror, auto, visible, startMode }); },
+  save() { const { text, speed, size, mirror, auto, visible, startMode } = this; DB.put('state', 'prompter', { text, speed, size, mirror, auto, visible, startMode }); SYNC.changed(); },
   render() {
     const esc = (t) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const paras = this.text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
@@ -1546,7 +1701,7 @@ const TP = {
     $('ptAuto').setAttribute('aria-pressed', String(this.auto));
     $('ptMirror').setAttribute('aria-pressed', String(this.mirror));
     $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode;
-    $('prompter').hidden = !this.visible || (LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
+    $('prompter').hidden = !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
   },
   lineY() { return this.view.clientHeight * 0.3; },
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
@@ -1877,10 +2032,10 @@ function openExport(el, s) {
   const hasV = s.video && s.video.nGroups > 0;
   const ytOn = S.settings.plat.yt.ch === '1';
   if (ytOn && !s.chapters) s.chapters = autoChapters(s);
-  box.innerHTML = `${hasV ? `<canvas class="pvv" width="${s.video.w}" height="${s.video.h}"></canvas>` : ''}<div class="pv"><button class="pv-play" aria-label="Ascolta">▶</button><input type="range" class="pv-seek" min="0" max="${dur.toFixed(2)}" step="0.1" value="0" aria-label="Posizione"><output class="pv-t">00:00:00 / ${fmt(dur, false)}</output></div>
+  box.innerHTML = `<div class="exl">${hasV ? `<canvas class="pvv" width="${s.video.w}" height="${s.video.h}"></canvas>` : ''}<div class="pv"><button class="pv-play" aria-label="Ascolta">▶</button><input type="range" class="pv-seek" min="0" max="${dur.toFixed(2)}" step="0.1" value="0" aria-label="Posizione"><output class="pv-t">00:00:00 / ${fmt(dur, false)}</output></div>
     <p class="note" style="margin:0">Anteprima del mix: muovi i livelli mentre ascolti. Qui il volume non è ancora normalizzato: il file esportato suonerà più forte.</p>
     <div class="row"><button class="ed-open main-act" title="Timeline a tracce: taglia, sposta, dividi, volumi e dissolvenze">🎬 Montaggio</button>${!isIdentity(s) || (s.vmutes || []).length ? '<span class="note">Sessione montata · durata ' + fmt(dur, false) + '</span>' : ''}</div>
-    <div class="strips"></div>
+    </div><div class="exr"><div class="strips"></div>
     ${ytOn ? `<h4 style="margin:6px 0 0;font:700 12px var(--f-display);letter-spacing:.16em;color:var(--violet)">CAPITOLI YOUTUBE</h4>
     <div class="chaps" style="display:flex;flex-direction:column;gap:6px"></div>
     <div class="row"><button class="ch-add">＋ Capitolo</button><button class="ch-auto">↻ Rigenera dagli stacchetti</button><button class="ch-copy main-act">📋 Copia per la descrizione</button><button class="ch-here" title="Aggiunge un capitolo nel punto dell'anteprima">＋ Qui (anteprima)</button></div>
@@ -1890,7 +2045,7 @@ function openExport(el, s) {
     <div class="form" style="margin-top:8px"><label>Formato</label><select class="fmt"><option value="mp3-128">MP3 128 kbps</option><option value="mp3-192">MP3 192 kbps</option><option value="wav">WAV senza perdita</option></select>
     <label>Volume</label><select class="norm"><option value="-16">−16 LUFS</option><option value="-14">−14 LUFS</option><option value="-19">−19 LUFS</option><option value="off">Lascia com'è</option></select></div>
     <div class="row" style="margin-top:8px"><button class="run">ESPORTA</button></div></details>
-    <div class="row"><span class="note msg"></span></div><div class="bar" hidden><i></i></div><div class="out"></div>`;
+    <div class="row"><span class="note msg"></span></div><div class="bar" hidden><i></i></div><div class="out"></div></div>`;
   const playB = box.querySelector('.pv-play'), seek = box.querySelector('.pv-seek'), tOut = box.querySelector('.pv-t');
   let dragging = false;
   PV = new Preview(s, () => { playB.textContent = PV && PV.playing ? '❚❚' : '▶'; });
@@ -2013,10 +2168,7 @@ async function importStudio(file) {
     const { head, items } = await PACK.read(file, (p) => { msg.textContent = `Leggo il file… ${Math.round(p * 100)}%`; });
     if (head.kind !== 'studio') throw new Error(head.kind === 'session' ? 'questo file è una sessione: aprilo da Sessioni → Importa sessione' : 'tipo di file sconosciuto');
     if (isRec() || blocked()) throw new Error('ferma prima la registrazione');
-    for (const it of items) {
-      if (it.store === 'state' && it.key === 'settings') { for (const k of LOCAL_KEYS) it.value[k] = S.settings[k]; }
-      await DB.put(it.store, it.key, it.value);
-    }
+    await applyStudio(items, null);
     msg.textContent = 'Studio caricato: riavvio OnAir…'; toast('Studio caricato: riavvio OnAir');
     setTimeout(() => location.reload(), 1200);
   } catch (e) { console.error(e); msg.textContent = 'Non riesco a caricare lo studio: ' + e.message; }
@@ -2056,7 +2208,7 @@ const ED = {
   async start(s, box) {
     this.s = s; this.box = box; this.open = true; this.sel = null; this.selSeg = null; this.selCh = null; this.undo = []; this.redo = [];
     $('edModal').hidden = false; $('edName').textContent = s.name;
-    const pvv = box.querySelector('.pvv'); this.pvv = pvv; if (pvv) { $('edVidHost').append(pvv); $('edVidHost').hidden = false; } else $('edVidHost').hidden = true;
+    const pvv = box.querySelector('.pvv'); this.pvv = pvv; this.pvvParent = pvv ? pvv.parentElement : null; if (pvv) { $('edVidHost').append(pvv); $('edVidHost').hidden = false; } else $('edVidHost').hidden = true;
     this.cv = $('edCanvas'); this.g = this.cv.getContext('2d'); this.resize();
     if (this.peaksFor !== s.id) { this.peaks = null; $('edMsg').textContent = 'Preparo la forma d\'onda…'; await this.buildPeaks(); this.peaksFor = s.id; }
     $('edMsg').textContent = '';
@@ -2064,7 +2216,7 @@ const ED = {
   },
   close() {
     this.open = false; $('edModal').hidden = true; if (PV && PV.playing) PV.stop();
-    if (this.pvv && this.box) this.box.prepend(this.pvv);
+    if (this.pvv && this.pvvParent) this.pvvParent.prepend(this.pvv);
     clearTimeout(this.saveT); DB.put('sessions', this.s.id, this.s);
     openSessions(this.s.id);
   },
@@ -2079,6 +2231,10 @@ const ED = {
   },
   resize() {
     const r = this.cv.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    for (const t of TRK) t.base = t.base || t.h;
+    let f = 1; // nella vista orizzontale le tracce si allargano per riempire lo schermo
+    if (ORIENT.wide) { const body = this.cv.closest('.ed-body').getBoundingClientRect(); const baseH = this.RH + TRK.reduce((a, t) => a + t.base, 0) + 8; f = Math.max(1, Math.min(3.2, (body.height - 30) / baseH)); }
+    for (const t of TRK) t.h = Math.round(t.base * f);
     this.W = Math.max(320, r.width); this.H = this.RH + TRK.reduce((a, t) => a + t.h, 0) + 8;
     this.cv.width = this.W * dpr; this.cv.height = this.H * dpr; this.cv.style.height = this.H + 'px'; this.g.setTransform(dpr, 0, 0, dpr, 0, 0); this.dirty = true;
   },
@@ -2296,6 +2452,91 @@ const ED = {
   }
 };
 
+/* ------------------------------------------------------------------ Sincronizzazione tra dispositivi (repository privato GitHub)
+ * Il token resta solo su questo dispositivo (non finisce nei file .onair né nella sincronizzazione). */
+const SYNC_GROUPS = [
+  ['testo', 'Testo del teleprompter'], ['audio', 'Sigla, sottofondi e capitoli (file audio)'], ['mixer', 'Mixer e livelli predefiniti'],
+  ['video', 'Video: effetto, inquadratura, green screen, logo, sfondo'], ['layout', 'Disposizioni, vista, tasti, re-take'], ['plat', 'Canale e piattaforme']
+];
+const SYNC_KEYS = { video: ['video', 'ov'], layout: ['layouts', 'layout', 'keys', 'mixStyle', 'orient', 'wideLay', 'retakeSec', 'preroll'], plat: ['plat', 'channel'] };
+const SYNC = {
+  cfg: null, timer: null,
+  async load() {
+    this.cfg = Object.assign({ repo: '', token: '', dev: '', groups: { testo: true, audio: true, mixer: true, video: true, layout: true, plat: true }, auto: false, check: true, last: 0 }, (await DB.get('state', 'sync')) || {});
+    if (!this.cfg.dev) { const ua = navigator.userAgent; this.cfg.dev = /Android/.test(ua) ? 'Tablet Android' : /Windows/.test(ua) ? 'PC Windows' : /Linux/.test(ua) ? 'PC Linux' : 'Questo dispositivo'; }
+  },
+  save() { DB.put('state', 'sync', this.cfg); },
+  ready() { return !!(this.cfg && this.cfg.repo && this.cfg.token); },
+  async api(path, opt = {}) {
+    const r = await fetch('https://api.github.com/repos/' + this.cfg.repo.trim() + path, { ...opt, headers: { Authorization: 'Bearer ' + this.cfg.token.trim(), 'X-GitHub-Api-Version': '2022-11-28', Accept: opt.raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', ...(opt.body ? { 'Content-Type': 'application/json' } : {}) } });
+    if (r.status === 404 && opt.allow404) return null;
+    if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error(r.status === 401 ? 'token non valido o scaduto' : r.status === 403 ? 'il token non ha il permesso di scrivere in quel repository' : r.status === 404 ? 'repository non trovato (controlla il nome o i permessi del token)' : `GitHub ha risposto ${r.status} ${t.slice(0, 120)}`); }
+    return r;
+  },
+  async test() { const r = await this.api(''); const j = await r.json(); if (!j.private) return 'Attenzione: il repository è pubblico. Rendilo privato: dentro ci sono i tuoi file.'; return `Collegato a ${j.full_name} (privato).`; },
+  b64(blob) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); }); },
+  async putFile(path, b64, msg) {
+    const old = await this.api('/contents/' + path, { allow404: true }); const sha = old ? (await old.json()).sha : undefined;
+    await this.api('/contents/' + path, { method: 'PUT', body: JSON.stringify({ message: msg, content: b64, sha }) });
+  },
+  async push(status) {
+    if (!this.ready()) throw new Error('imposta prima repository e token');
+    status('Preparo i dati…');
+    const items = [];
+    for (const k of ['deck', 'settings', 'prompter']) { const v = await DB.get('state', k); if (v) items.push({ store: 'state', key: k, value: v }); }
+    const ids = new Set([S.deck.intro, ...S.deck.bg, ...S.deck.caps, 'ov-bg', 'ov-logo', 'ov-bgv'].filter(Boolean));
+    for (const id of ids) { const f = await DB.get('files', id); if (f) items.push({ store: 'files', key: id, value: f }); }
+    const blob = await PACK.build('studio', items, 'Sincronizzazione');
+    if (blob.size > 70 * 1048576) throw new Error('lo studio è troppo grande per la sincronizzazione (oltre 70 MB): usa il file .onair');
+    status(`Invio ${(blob.size / 1048576).toFixed(1)} MB…`);
+    const when = Date.now();
+    await this.putFile('studio.onair', await this.b64(blob), `OnAir: studio da ${this.cfg.dev}`);
+    const meta = { updated: when, device: this.cfg.dev, app: APP.version, size: blob.size };
+    await this.putFile('meta.json', btoa(unescape(encodeURIComponent(JSON.stringify(meta, null, 1)))), `OnAir: ${this.cfg.dev}`);
+    this.cfg.last = when; this.save();
+    return meta;
+  },
+  async remoteMeta() { const r = await this.api('/contents/meta.json', { raw: true, allow404: true }); return r ? r.json() : null; },
+  async pull(status) {
+    if (!this.ready()) throw new Error('imposta prima repository e token');
+    const meta = await this.remoteMeta(); if (!meta) throw new Error('nel repository non c\'è ancora niente: prima invia da un dispositivo');
+    status('Scarico…');
+    const r = await this.api('/contents/studio.onair', { raw: true }); const blob = await r.blob();
+    status('Applico le impostazioni scelte…');
+    const { items } = await PACK.read(blob);
+    await applyStudio(items, this.cfg.groups);
+    this.cfg.last = meta.updated; this.save();
+    return meta;
+  },
+  async startupCheck() {
+    if (!this.ready() || !this.cfg.check) return;
+    try {
+      const meta = await this.remoteMeta();
+      if (meta && meta.updated > (this.cfg.last || 0) && meta.device !== this.cfg.dev) {
+        const b = $('syncBanner'); b.hidden = false;
+        $('syncBannerTxt').textContent = `Su «${meta.device}» ci sono impostazioni più recenti (${new Date(meta.updated).toLocaleString('it-IT')}).`;
+      }
+    } catch (e) { console.warn('sync', e); }
+  },
+  changed() { // invio automatico dopo 2 minuti senza modifiche
+    if (!this.cfg || !this.cfg.auto || !this.ready()) return;
+    clearTimeout(this.timer); this.timer = setTimeout(async () => { if (isRec() || blocked()) { this.changed(); return; } try { await this.push(() => {}); toast('Impostazioni inviate agli altri dispositivi'); } catch (e) { console.warn(e); } }, 120000);
+  }
+};
+async function applyStudio(items, groups) {
+  const g = groups || { testo: 1, audio: 1, mixer: 1, video: 1, layout: 1, plat: 1 };
+  const cur = { deck: (await DB.get('state', 'deck')) || {}, settings: (await DB.get('state', 'settings')) || {}, prompter: await DB.get('state', 'prompter') };
+  for (const it of items) {
+    if (it.store === 'files') { const isOv = String(it.key).startsWith('ov-'); if ((isOv && g.video) || (!isOv && g.audio)) await DB.put('files', it.key, it.value); continue; }
+    if (it.store !== 'state') continue;
+    const v = it.value;
+    if (it.key === 'prompter' && g.testo) cur.prompter = { ...(cur.prompter || {}), text: v.text, speed: v.speed, size: v.size, mirror: v.mirror, auto: v.auto, startMode: v.startMode };
+    if (it.key === 'deck') { if (g.audio) cur.deck.deck = v.deck; if (g.mixer) { cur.deck.mix = v.mix; cur.deck.defaults = v.defaults; } }
+    if (it.key === 'settings') for (const [grp, keys] of Object.entries(SYNC_KEYS)) if (g[grp]) for (const k of keys) if (k in v) cur.settings[k] = v[k];
+  }
+  await DB.put('state', 'deck', cur.deck); await DB.put('state', 'settings', cur.settings); if (cur.prompter) await DB.put('state', 'prompter', cur.prompter);
+}
+
 /* Capitoli YouTube */
 function fmtCh(t) { t = Math.max(0, Math.floor(t)); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = t % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`; }
 function parseCh(v) { const p = String(v).trim().split(':').map(x => x.trim()); if (!p.length || p.some(x => !/^\d+$/.test(x)) || p.length > 3) return null; return p.reduce((a, x) => a * 60 + (+x), 0); }
@@ -2357,6 +2598,24 @@ async function addFiles(files) {
   return ids;
 }
 
+/* Vista orizzontale (monitor 16:9) o verticale (tablet, telefono) */
+const ORIENT = {
+  wide: false,
+  apply() {
+    const o = S.settings.orient || 'auto';
+    const wide = o === 'wide' || (o === 'auto' && innerWidth >= 1180 && innerWidth / innerHeight >= 1.3);
+    const changed = wide !== this.wide; this.wide = wide;
+    document.body.classList.toggle('wide', wide); document.body.classList.toggle('short', wide && innerHeight < 900); document.body.dataset.wl = S.settings.wideLay || 'center';
+    const host = $('panels'); if (!host) return;
+    if (wide) {
+      host.querySelectorAll('.pnl').forEach(el => { el.hidden = el.dataset.panel === 'prompter' ? !TP.visible : false; });
+      const top = host.getBoundingClientRect().top + scrollY; host.style.height = Math.max(520, innerHeight - top - 18) + 'px';
+    } else { host.style.height = ''; if (changed) LAY.apply(S.settings.layout || 'classico'); }
+    if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
+    if (ED.open) { ED.resize(); ED.clampX(); ED.syncScroll(); }
+  }
+};
+
 /* Disposizione dei pannelli */
 const PANELS = [['transport', 'Registrazione (contatore e pulsanti)'], ['prompter', 'Teleprompter'], ['video', 'Video'], ['intro', 'Sigla'], ['bg', 'Sottofondo'], ['cap', 'Capitoli'], ['mixer', 'Mixer']];
 const LAY_PRESETS = {
@@ -2373,6 +2632,7 @@ const LAY = {
     L.order.forEach((p, i) => { const el = host.querySelector(`[data-panel="${p}"]`); if (!el) return; el.style.order = i; el.dataset.w = L.w[p] || '1'; el.hidden = L.hidden.includes(p) || (p === 'prompter' && !TP.visible); });
     $('prompter').dataset.tall = L.tall ? '1' : '0';
     if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
+    if (typeof ORIENT !== 'undefined' && ORIENT.wide) ORIENT.apply();
   },
   edit: null,
   renderSettings() {
@@ -2567,7 +2827,11 @@ function wire() {
   $('setPre').addEventListener('change', (e) => { S.settings.preroll = Math.max(0, Math.min(10, +e.target.value || 0)); saveSettings(); });
   $('setNs').addEventListener('change', async (e) => { S.settings.ns = e.target.value === '1'; saveSettings(); if (R.state === 'idle') await initMic(); else toast('Vale dalla prossima registrazione'); });
   $('setDev').addEventListener('click', () => { $('setModal').hidden = true; DEV.open(); });
-  LAY.wire(); LAY.apply(S.settings.layout || 'classico');
+  LAY.wire(); LAY.apply(S.settings.layout || 'classico'); ORIENT.apply();
+  window.addEventListener('resize', () => { clearTimeout(ORIENT.t); ORIENT.t = setTimeout(() => ORIENT.apply(), 120); });
+  $('setOrient').value = S.settings.orient || 'auto'; $('setWideLay').value = S.settings.wideLay || 'center';
+  $('setOrient').addEventListener('change', (e) => { S.settings.orient = e.target.value; saveSettings(); ORIENT.apply(); });
+  $('setWideLay').addEventListener('change', (e) => { S.settings.wideLay = e.target.value; saveSettings(); ORIENT.apply(); });
   $('keyReset').addEventListener('click', () => { S.settings.keys = { ...DEF_KEYS }; saveSettings(); renderKeys(); toast('Tasti predefiniti ripristinati'); });
   renderKeys();
   $('devBtn').addEventListener('click', () => DEV.open());
@@ -2588,9 +2852,16 @@ function wire() {
   // Sfondo, logo, Iscriviti
   const ov = S.settings.ov;
   $('ovBg').value = ov.bg; $('ovLogoPos').value = ov.logoPos; $('ovLogoSize').value = ov.logoSize; $('ovLogoOp').value = ov.logoOp;
-  const syncOv = () => { $('ovLogoOn').setAttribute('aria-pressed', String(!!ov.logoOn)); $('ovLogoSizeO').textContent = Math.round(ov.logoSize * 100) + '%'; $('ovLogoOpO').textContent = Math.round(ov.logoOp * 100) + '%'; $('ovBgLoad').hidden = ov.bg !== 'image'; };
+  const syncOv = () => { $('ovLogoOn').setAttribute('aria-pressed', String(!!ov.logoOn)); $('ovLogoSizeO').textContent = Math.round(ov.logoSize * 100) + '%'; $('ovLogoOpO').textContent = Math.round(ov.logoOp * 100) + '%'; $('ovBgLoad').hidden = $('ovBgName').hidden = ov.bg !== 'image'; $('ovBgvLoad').hidden = $('ovBgvName').hidden = ov.bg !== 'video'; $('ovBehind').checked = ov.behind !== false; };
   syncOv();
-  $('ovBg').addEventListener('change', (e) => { ov.bg = e.target.value; saveSettings(); syncOv(); if (ov.bg === 'image' && !OUT.bg) $('fileOvBg').click(); });
+  $('ovBg').addEventListener('change', (e) => { ov.bg = e.target.value; saveSettings(); syncOv(); if (ov.bg === 'image' && !OUT.bg) $('fileOvBg').click(); if (ov.bg === 'video' && !OUT.bgv) $('fileOvBgv').click(); });
+  $('ovBgvLoad').addEventListener('click', () => $('fileOvBgv').click());
+  $('ovBehind').addEventListener('change', (e) => { ov.behind = e.target.checked; saveSettings(); });
+  $('fileOvBgv').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    if (f.size > 200e6) return toast('Video troppo grande: usa un file sotto i 200 MB (bastano pochi secondi in loop)');
+    await DB.put('files', 'ov-bgv', { name: f.name, type: f.type, blob: f }); await OUT.loadImages(); toast('Video di sfondo caricato: ' + f.name);
+  });
   $('ovBgLoad').addEventListener('click', () => $('fileOvBg').click());
   $('ovLogoLoad').addEventListener('click', () => $('fileOvLogo').click());
   for (const [inp, key, id] of [['fileOvBg', 'bg', 'ov-bg'], ['fileOvLogo', 'logo', 'ov-logo']]) $(inp).addEventListener('change', async (e) => {
@@ -2604,6 +2875,23 @@ function wire() {
   $('ovLogoOp').addEventListener('input', (e) => { ov.logoOp = +e.target.value; saveSettings(); syncOv(); });
   $('ovSub').addEventListener('click', () => SUB.start());
   ED.wire();
+  // Sincronizzazione
+  const sc = SYNC.cfg;
+  $('syRepo').value = sc.repo; $('syToken').value = sc.token; $('syDev').value = sc.dev; $('syAuto').checked = !!sc.auto; $('syCheck').checked = sc.check !== false;
+  const gbox = $('syGroups'); gbox.replaceChildren();
+  for (const [k, t] of SYNC_GROUPS) { const l = document.createElement('label'); l.className = 'chk'; l.innerHTML = `<input type="checkbox" id="syg-${k}"> `; l.append(t); const cb = l.querySelector('input'); cb.checked = sc.groups[k] !== false; cb.addEventListener('change', () => { sc.groups[k] = cb.checked; SYNC.save(); }); gbox.append(l); }
+  for (const [id, k] of [['syRepo', 'repo'], ['syToken', 'token'], ['syDev', 'dev']]) $(id).addEventListener('change', (e) => { sc[k] = e.target.value.trim(); SYNC.save(); });
+  $('syAuto').addEventListener('change', (e) => { sc.auto = e.target.checked; SYNC.save(); });
+  $('syCheck').addEventListener('change', (e) => { sc.check = e.target.checked; SYNC.save(); });
+  const syMsg = (t, c) => { const m = $('syMsg'); m.textContent = t; m.style.color = c || 'var(--dim)'; };
+  const syncInfo = async () => { if (!SYNC.ready()) { syMsg('Non ancora collegato.'); return; } try { const m = await SYNC.remoteMeta(); syMsg(m ? `Ultimo invio: ${new Date(m.updated).toLocaleString('it-IT')} da «${m.device}» (${(m.size / 1048576).toFixed(1)} MB).` : 'Collegato, ma non è ancora stato inviato niente.'); } catch (e) { syMsg('Non riesco a collegarmi: ' + e.message, 'var(--rec)'); } };
+  $('syTest').addEventListener('click', async () => { syMsg('Controllo…'); try { syMsg(await SYNC.test(), 'var(--ok)'); setTimeout(syncInfo, 1500); } catch (e) { syMsg('Non funziona: ' + e.message, 'var(--rec)'); } });
+  $('syPush').addEventListener('click', async (e) => { const b = e.currentTarget; b.disabled = true; try { const m = await SYNC.push((t) => syMsg(t)); syMsg(`Inviato (${(m.size / 1048576).toFixed(1)} MB): sugli altri dispositivi premi «Ricevi».`, 'var(--ok)'); } catch (err) { syMsg('Invio non riuscito: ' + err.message, 'var(--rec)'); } b.disabled = false; });
+  const doPull = async () => { if (isRec() || blocked()) { toast('Ferma prima la registrazione'); return; } try { const m = await SYNC.pull((t) => syMsg(t)); toast(`Impostazioni ricevute da «${m.device}»: riavvio OnAir`); setTimeout(() => location.reload(), 1200); } catch (err) { syMsg('Ricezione non riuscita: ' + err.message, 'var(--rec)'); toast('Ricezione non riuscita: ' + err.message); } };
+  $('syPull').addEventListener('click', doPull);
+  $('syncBannerGo').addEventListener('click', () => { $('syncBanner').hidden = true; doPull(); });
+  $('syncBannerNo').addEventListener('click', () => { $('syncBanner').hidden = true; });
+  $('setBtn').addEventListener('click', () => syncInfo());
   // Backup e trasferimento
   let onairMode = 'studio';
   $('bkSave').addEventListener('click', () => exportStudio());
@@ -2627,6 +2915,9 @@ function wire() {
     $('vZoom').setAttribute('aria-pressed', String(!!vs.zoom)); $('vZoom').disabled = !vs.mask;
     $('vAreaReset').disabled = !vs.mask; $('vKey').setAttribute('aria-pressed', String(!!vs.key));
     $('vKc').style.background = vs.kc || '#33b34d'; $('vTol').value = vs.tol ?? 0.09; $('vTolO').textContent = Math.round((vs.tol ?? 0.09) * 100);
+    $('vVbg').setAttribute('aria-pressed', String(!!vs.vbg && !!CAM.bgCanvas)); $('vVbg').disabled = !CAM.bgCanvas;
+    $('vVtol').value = vs.vtol ?? 0.12; $('vVtolO').textContent = Math.round((vs.vtol ?? 0.12) * 100);
+    $('vScene').textContent = CAM.bgCanvas ? '🎬 Registra di nuovo la scena vuota' : '🎬 Registra la scena vuota';
   };
   syncFrameUI();
   const endEdit = () => { CAM.edit = null; box.classList.remove('editing'); areaBox.hidden = true; hint.hidden = true; };
@@ -2663,6 +2954,29 @@ function wire() {
   $('vZoom').addEventListener('click', () => { if (isRec() || blocked()) return toast('Cambia l\'inquadratura a registrazione ferma'); vs.zoom = !vs.zoom; saveSettings(); syncFrameUI(); });
   $('vKey').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva il green screen a registrazione ferma'); vs.key = !vs.key; saveSettings(); syncFrameUI(); if (vs.key && !vs.kcPicked) toast('Per un risultato migliore premi «Scegli il verde» e clicca sul telo'); });
   $('vTol').addEventListener('input', (e) => { vs.tol = +e.target.value; saveSettings(); syncFrameUI(); });
+  $('vVtol').addEventListener('input', (e) => { vs.vtol = +e.target.value; saveSettings(); syncFrameUI(); });
+  $('vVbg').addEventListener('click', async () => {
+    if (isRec() || blocked()) return toast('Attiva il green screen virtuale a registrazione ferma');
+    if (!CAM.bgCanvas) return toast('Prima registra la scena vuota');
+    vs.vbg = !vs.vbg; saveSettings(); syncFrameUI();
+    if (vs.vbg) $('vVbgNote').textContent = await CAM.lockCamera(); else { CAM.unlockCamera(); $('vVbgNote').textContent = 'Green screen virtuale spento.'; }
+  });
+  $('vScene').addEventListener('click', async () => {
+    if (isRec() || blocked()) return toast('Registra la scena vuota a registrazione ferma');
+    if (!CAM.ok) return toast('Webcam non attiva');
+    const btn = $('vScene'); btn.disabled = true; CAM.edit = 'scene'; hint.hidden = false;
+    try {
+      await CAM.unlockCamera();
+      for (let k = 5; k > 0; k--) { hint.textContent = 'Esci dall\'inquadratura (porta via la sedia se vuoi farla sparire)… ' + k; await new Promise(r => setTimeout(r, 1000)); }
+      const lock = await CAM.lockCamera();
+      await new Promise(r => setTimeout(r, 400));
+      await CAM.captureScene((p) => { hint.textContent = 'Sto registrando la scena vuota… ' + Math.round(p * 100) + '% · resta fuori'; });
+      vs.vbg = true; saveSettings(); C2D.bgKey = null;
+      $('vVbgNote').textContent = 'Scena vuota registrata (' + lock + '). Ora rientra: si vede solo ciò che è nuovo.';
+      toast('Scena vuota registrata: rientra pure');
+    } catch (e) { toast('Non sono riuscito a registrare la scena: ' + e.message); }
+    CAM.edit = null; hint.hidden = true; btn.disabled = false; syncFrameUI();
+  });
   $('vOn').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva o disattiva il video a registrazione ferma'); vs.on = !vs.on; saveSettings(); renderStatus(); });
   if (!V.codec) { $('vOn').disabled = true; $('vOn').title = 'Questo browser non sa registrare video: usa Chrome o Edge aggiornati'; vs.on = false; }
 
@@ -2716,11 +3030,11 @@ async function boot() {
       await V.probe();
       await initMic();
       $('boot').hidden = true; $('app').hidden = false;
-      CAM.setup(); OUT.setup(); await OUT.loadImages();
+      CAM.setup(); OUT.setup(); await OUT.loadImages(); await CAM.loadScene();
       wire(); renderAll(); TP.render(); requestAnimationFrame(loop);
       if (S.settings.camId !== 'none') await CAM.init(S.settings.camId); else CAM.chosen = 'none';
       await DEV.open(true);
-      await preloadDeck(); await recoverSessions();
+      await preloadDeck(); await recoverSessions(); SYNC.startupCheck();
     } catch (e) {
       console.error(e); $('bootErr').textContent = 'Non riesco ad avviare l\'audio: ' + e.message + '. Usa Chrome, Edge o Firefox aggiornati.'; $('bootErr').hidden = false; $('bootBtn').disabled = false;
     }
@@ -2736,7 +3050,7 @@ async function boot() {
         Object.assign(S.mutes, st.mutes || {});
       }
       const se = await DB.get('state', 'settings'); if (se) { const vd = S.settings.video, od = S.settings.ov, pd = S.settings.plat; Object.assign(S.settings, se); S.settings.video = { ...vd, ...(se.video || {}) }; S.settings.ov = { ...od, ...(se.ov || {}) }; S.settings.plat = { sp: { ...pd.sp, ...((se.plat || {}).sp || {}) }, yt: { ...pd.yt, ...((se.plat || {}).yt || {}) } }; if (se.keys) { const ks = { ...DEF_KEYS, ...se.keys }; if (ks.tpUp === 'ArrowUp' && ks.tpDown === 'ArrowDown') { ks.tpUp = 'Shift+ArrowUp'; ks.tpDown = 'Shift+ArrowDown'; ks.tpBack = 'ArrowUp'; ks.tpFwd = 'ArrowDown'; } S.settings.keys = ks; } }
-      await TP.load();
+      await TP.load(); await SYNC.load();
     } catch (e) { console.warn(e); }
     await loadNames();
     $('footInfo').textContent = DB.ok ? 'Dati salvati in questo browser' : 'Attenzione: questo browser non salva i dati, esporta prima di chiudere';

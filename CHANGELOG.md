@@ -7,6 +7,27 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.3.0 — 14/11/2026
+**Green screen virtuale** (scheda Video)
+- «🎬 Registra la scena vuota»: conto alla rovescia di 5 secondi, esci dall'inquadratura (porta via la sedia se vuoi farla sparire) e OnAir memorizza la stanza.
+- Interruttore «Green screen virtuale» e cursore «Sensibilità»: si vede solo ciò che è diverso dalla scena vuota (tu, un ospite, un oggetto).
+- Esposizione, bilanciamento del bianco e messa a fuoco bloccati quando la webcam lo permette (altrimenti: luce costante).
+- Sfondo «Anche dietro di te»: con green screen a colore o virtuale, al posto della stanza metti nero, sfocato, un'immagine o un video in loop.
+- La scena vuota è salvata su questo dispositivo (non viene sincronizzata: ogni stanza ha la sua).
+
+## V3.2.0 — 14/11/2026
+**Sincronizzazione** (Impostazioni → Sincronizzazione)
+- Repository GitHub privato + token personale con permesso «Contents: read and write» solo su quel repository.
+- «⬆ Invia» carica le impostazioni scelte, «⬇ Ricevi» le applica; all'avvio avviso se l'altro dispositivo ha impostazioni più recenti.
+- Gruppi a scelta: testo e brani, mixer, video e sovrimpressioni, disposizioni e tasti, piattaforme. Invio automatico facoltativo.
+- Il token resta sul dispositivo: non entra nei file .onair né nella sincronizzazione.
+
+## V3.1.0 — 14/11/2026
+**Vista orizzontale**
+- Su monitor 16:9 la registrazione sta tutta in uno schermo: video, mixer, teleprompter e comandi affiancati, senza scorrere.
+- Montaggio orizzontale: timeline larga, anteprima ed esportazione di lato, tracce più alte.
+- Impostazioni → Vista: automatica, orizzontale o verticale; posizione del video (centro, sinistra, destra).
+
 ## V3.0.0 — 08/11/2026
 Nuova versione maggiore: montaggio e nuova grafica.
 

@@ -167,6 +167,57 @@ button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .ed-insp .knobs{grid-template-columns:auto minmax(0,1fr) 4.6em;max-width:560px}
 .ed-in{flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:7px 10px}
 @media (max-width:900px){.ed-body{flex-direction:column}.ed-side{width:100%}}
+.ed-side{display:flex;flex-direction:column;gap:10px}
+.exl,.exr{display:flex;flex-direction:column;gap:10px;min-width:0}
+/* ---------- Vista orizzontale: tutto in uno schermo ---------- */
+body.wide .wrap{max-width:none;gap:10px}
+body.wide #panels{display:grid;gap:12px;align-items:stretch;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,.95fr);grid-template-rows:auto minmax(0,1fr) minmax(0,1fr) auto;grid-template-areas:"transport prompter intro" "video prompter bg" "video prompter cap" "mixer mixer mixer"}
+body.wide[data-wl=left] #panels{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.95fr);grid-template-areas:"prompter transport intro" "prompter video bg" "prompter video cap" "mixer mixer mixer"}
+body.wide[data-wl=right] #panels{grid-template-columns:minmax(0,1fr) minmax(0,.95fr) minmax(0,1.35fr);grid-template-areas:"transport intro prompter" "video bg prompter" "video cap prompter" "mixer mixer mixer"}
+body.wide #panels>.pnl{width:auto!important;min-height:0;overflow:auto;order:0!important}
+body.wide [data-panel=transport]{grid-area:transport} body.wide [data-panel=prompter]{grid-area:prompter} body.wide [data-panel=video]{grid-area:video}
+body.wide [data-panel=intro]{grid-area:intro} body.wide [data-panel=bg]{grid-area:bg} body.wide [data-panel=cap]{grid-area:cap} body.wide [data-panel=mixer]{grid-area:mixer}
+body.wide .transport{grid-template-columns:1fr;padding:12px;gap:10px}
+body.wide .tc{font-size:clamp(28px,2.6vw,44px);padding:8px 12px}
+body.wide .tbtns button{min-height:46px;flex:1 1 120px;font-size:12px}
+body.wide .prompter{display:flex;flex-direction:column;overflow:hidden}
+body.wide .prompter .pt-view{flex:1;height:auto!important;min-height:120px}
+body.wide .prompter .pt-edit{flex:1;min-height:0}
+body.wide .prompter .pt-edit textarea{height:100%!important;min-height:120px}
+body.wide .card{gap:8px;padding:12px}
+body.wide .card .note{display:none}
+body.wide .card .list{max-height:none;flex:1;min-height:56px}
+body.wide #cardIntro .fname{padding:7px 10px}
+body.wide .vcard{padding:12px}
+body.wide #panels>.vcard{display:flex;flex-direction:column;overflow:hidden}
+body.wide .vcard>.vbox{flex:none}
+body.wide .vcard>.vctl{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
+body.wide .mixer{padding:10px 12px;gap:6px}
+body.wide .mixer>.note{display:none}
+body.wide .strips.console .cs-main{height:118px}
+body.wide .strips.console .eqc{height:26px}
+body.wide #liveStrips.console{grid-template-columns:repeat(5,minmax(0,1fr))}
+body.wide .keys{display:none}
+body.wide .foot{display:none}
+body.wide.short #panels{gap:8px}
+body.wide.short .strips.console .eqc{display:none}
+body.wide.short .strips.console .cs-main{height:64px}
+body.wide.short .mixer{padding:8px 10px;gap:4px}
+body.wide.short .tc{font-size:30px;padding:4px 10px}
+body.wide.short .tbtns button{min-height:38px;flex-basis:90px}
+body.wide.short .card,body.wide.short .vcard{padding:8px 10px;gap:6px}
+body.wide.short .card .list{min-height:34px}
+body.wide.short .strips.console .inmic{display:flex;align-items:center;gap:6px;margin:0}
+body.wide.short .strips.console .inmic .fl{white-space:nowrap;font-size:10px}
+body.wide.short .strips.console .strip{gap:4px;padding:6px 8px}
+body.wide.short .strip details.eq>summary{padding:2px 0}
+body.wide #sessModal .sheet{width:min(1680px,100%)}
+body.wide .exp:not([hidden]){display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+body.wide .ed{height:100%}
+body.wide .ed-body{flex:1;min-height:0;align-items:stretch}
+body.wide .ed-side{width:min(440px,34%)}
+body.wide .ed-insp{flex:1;overflow:auto}
+@media (max-width:1100px){body.wide .exp:not([hidden]){grid-template-columns:1fr}}
 .strip{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .strip .h{display:flex;align-items:center;gap:8px}
 .strip .h b{font:700 11px var(--f-display);letter-spacing:.16em;flex:1}
@@ -273,6 +324,7 @@ canvas.wave{cursor:pointer}
 .stage.no-pt{grid-template-columns:minmax(0,1fr)}
 .stage.no-pt .vcard{max-width:640px}
 .vcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.vctl{display:flex;flex-direction:column;gap:10px;min-width:0}
 .vcard h2{margin:0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet);display:flex;align-items:center;gap:8px}
 .vcard h2 .sp{flex:1}
 .vbox{position:relative;aspect-ratio:16/9;max-width:100%;background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -326,6 +378,11 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
 .chap .bad{border-color:var(--rec)}
 .exb{display:flex;gap:10px;flex-wrap:wrap}
 .exb button{flex:1 1 200px;min-height:52px;font:700 14px var(--f-display);letter-spacing:.06em}
+.tin{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%}
+.syg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px}
+.syncbar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom,0px));z-index:58;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--violet);box-shadow:0 0 22px rgba(141,123,255,.35);padding:10px 14px;border-radius:12px;max-width:calc(100% - 32px);font-size:14px}
+@media (max-width:640px){.syg{grid-template-columns:1fr}}
 .laylist{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto auto;gap:6px 10px;align-items:center}
 .laylist select{background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:5px 8px}
 .laylist button{padding:3px 9px}
@@ -351,7 +408,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.0.0</span>
+    <span class="ver" id="bootVer">V3.3.0</span>
   </div>
 </div>
 
@@ -359,7 +416,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.0.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.3.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -411,6 +468,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <section class="vcard pnl" id="vcard" data-panel="video">
     <h2>VIDEO <span class="sp"></span><button class="switch" id="vOn" aria-pressed="true" title="Registra anche il video">Registra video</button></h2>
     <div class="vbox" id="vBox"><canvas id="vCanvas" width="1280" height="720" style="display:none"></canvas><canvas id="vOut" width="1280" height="720"></canvas><div class="varea" id="vAreaBox" hidden></div><div class="vhint" id="vHint" hidden></div><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
+    <div class="vctl">
     <div class="knobs">
       <label for="vThr">Contorni</label><input type="range" id="vThr" min="0.02" max="0.6" step="0.01"><output id="vThrO"></output>
       <label for="vGl">Disturbo</label><input type="range" id="vGl" min="0" max="1" step="0.01"><output id="vGlO"></output>
@@ -434,10 +492,19 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="knobs">
       <label for="vTol">Tolleranza</label><input type="range" id="vTol" min="0.02" max="0.3" step="0.005"><output id="vTolO"></output>
     </div>
+    <div class="row">
+      <button id="vScene" title="Esci dall'inquadratura: OnAir registra la stanza vuota e poi mostra solo ciò che è nuovo (tu, un ospite, un oggetto)">🎬 Registra la scena vuota</button>
+      <button class="switch" id="vVbg" aria-pressed="false" title="Toglie tutto ciò che c'era nella scena vuota">Green screen virtuale</button>
+    </div>
+    <div class="knobs">
+      <label for="vVtol">Sensibilità</label><input type="range" id="vVtol" min="0.03" max="0.35" step="0.005"><output id="vVtolO"></output>
+    </div>
+    <div class="note" id="vVbgNote">Senza telo: registra la stanza vuota, poi rientra. Tieni la luce costante e la webcam ferma.</div>
     <details class="eq" id="ovBox"><summary>Sfondo, logo e Iscriviti</summary>
       <div class="knobs" style="grid-template-columns:auto minmax(0,1fr)">
-        <label for="ovBg">Sfondo dove non arriva la webcam</label><select id="ovBg"><option value="none">Nero</option><option value="blur">Sfocato, come al TG</option><option value="image">Immagine</option></select>
-        <span></span><div class="row"><button id="ovBgLoad">🖼 Carica immagine di sfondo</button><span class="note" id="ovBgName"></span></div>
+        <label for="ovBg">Sfondo</label><select id="ovBg"><option value="none">Nero</option><option value="blur">Sfocato, come al TG</option><option value="image">Immagine</option><option value="video">Video</option></select>
+        <span></span><div class="row"><button id="ovBgLoad">🖼 Carica immagine di sfondo</button><span class="note" id="ovBgName"></span><button id="ovBgvLoad">🎞 Carica video di sfondo</button><span class="note" id="ovBgvName"></span></div>
+        <span></span><label class="chk"><input type="checkbox" id="ovBehind"> Anche dietro di te (con green screen o scena vuota)</label>
         <label for="ovLogoOn">Logo</label><div class="row"><button class="switch" id="ovLogoOn" aria-pressed="false">Mostra logo</button><button id="ovLogoLoad">🖼 Carica logo (PNG)</button></div>
         <label for="ovLogoPos">Posizione</label><select id="ovLogoPos"><option value="tl">In alto a sinistra</option><option value="tr">In alto a destra</option><option value="bl">In basso a sinistra</option><option value="br">In basso a destra</option></select>
       </div>
@@ -450,6 +517,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="note" id="vFps" style="font-family:var(--f-mono)">—</div>
     <div class="note" id="vWarn" style="color:var(--warn)" hidden></div>
     <p class="note" style="margin:0">Il video si registra con l'effetto già applicato. Tieni OnAir in primo piano mentre registri: se la finestra è nascosta il browser rallenta il video.</p>
+    </div>
   </section>
 
     <section class="card pnl" id="cardIntro" data-panel="intro">
@@ -497,7 +565,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.0.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.3.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -574,9 +642,8 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     </div>
     <div class="ed-body">
       <div class="ed-tl"><canvas id="edCanvas"></canvas><input type="range" id="edScroll" min="0" max="0" step="0.01" value="0" aria-label="Scorri la timeline"></div>
-      <div class="ed-side" id="edVidHost" hidden></div>
+      <div class="ed-side"><div id="edVidHost" hidden></div><div class="ed-insp" id="edInsp"></div></div>
     </div>
-    <div class="ed-insp" id="edInsp"></div>
     <p class="note" id="edMsg" style="margin:0"></p>
     <p class="note" style="margin:0">Tasti: Spazio play · S dividi · Canc taglia/elimina · M silenzia · C capitolo · ← → sposta il cursore · Ctrl+Z annulla · Esc chiudi.</p>
   </div>
@@ -601,6 +668,26 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <label for="setPre">Pre-ascolto prima di ripartire (s)</label><input type="number" id="setPre" min="0" max="10" step="0.5">
       <label for="setNs">Riduzione rumore del browser</label><select id="setNs"><option value="0">Spenta (consigliato a casa)</option><option value="1">Accesa (utile in viaggio)</option></select>
     </div>
+    <h3 style="font-size:13px">SINCRONIZZAZIONE TRA DISPOSITIVI</h3>
+    <p class="note" style="margin:0">Tieni le stesse impostazioni sul PC di casa, sul portatile e sul tablet. OnAir le salva in un tuo repository <b>privato</b> su GitHub. Le registrazioni non vengono sincronizzate: per quelle usa «Trasferisci» in Sessioni.</p>
+    <details class="eq"><summary>Come si collega (una volta sola per dispositivo)</summary>
+      <ol class="note" style="margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+        <li>Crea un repository <b>privato</b> vuoto, per esempio <code>onair-sync</code>, su <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a> (solo la prima volta).</li>
+        <li>Crea un token su <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>: «Only select repositories» → quel repository; in «Repository permissions» metti <b>Contents: Read and write</b>.</li>
+        <li>Incolla qui sotto il nome del repository e il token, poi premi «Verifica». Il token resta solo su questo dispositivo.</li>
+      </ol>
+    </details>
+    <div class="form">
+      <label for="syRepo">Repository</label><input id="syRepo" placeholder="galimbertip/onair-sync" autocomplete="off" class="tin">
+      <label for="syToken">Token</label><input id="syToken" type="password" placeholder="github_pat_…" autocomplete="off" class="tin">
+      <label for="syDev">Nome di questo dispositivo</label><input id="syDev" placeholder="PC di casa" class="tin">
+    </div>
+    <div class="note" style="margin:2px 0 0">Cosa sincronizzare:</div>
+    <div class="syg" id="syGroups"></div>
+    <label class="chk"><input type="checkbox" id="syCheck"> All'avvio avvisami se un altro dispositivo ha impostazioni più recenti</label>
+    <label class="chk"><input type="checkbox" id="syAuto"> Invia da solo quando cambio qualcosa (dopo 2 minuti di calma)</label>
+    <div class="row"><button id="syTest">Verifica</button><button id="syPush" class="main-act">⬆ Invia da questo dispositivo</button><button id="syPull">⬇ Ricevi</button></div>
+    <span class="note" id="syMsg"></span>
     <h3 style="font-size:13px">BACKUP E TRASFERIMENTO</h3>
     <p class="note" style="margin:0">Lo «studio» è tutto il resto tranne le registrazioni: sigla, sottofondi, capitoli, testo del teleprompter, logo, sfondo, mixer, disposizioni, tasti e piattaforme. Salvalo in un file .onair e aprilo su un altro dispositivo (PC, tablet). Microfono e webcam scelti restano quelli del dispositivo. Le singole registrazioni si trasferiscono da Sessioni.</p>
     <div class="row"><button id="bkSave" class="main-act">⬇ Salva lo studio in un file</button><button id="bkLoad">⬆ Carica uno studio</button><span class="note" id="bkMsg"></span></div>
@@ -622,6 +709,11 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
           <label for="ytChName">Nome dei capitoli</label><select id="ytChName"><option value="file">Nome del file dello stacchetto</option><option value="num">Capitolo 1, 2, 3…</option></select>
           <label for="ytIntro">Primo capitolo (a 00:00)</label><input id="ytIntro" value="Introduzione" style="background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;width:100%">
         </div></section>
+    </div>
+    <h3 style="font-size:13px">VISTA</h3>
+    <div class="form">
+      <label for="setOrient">Orientamento</label><select id="setOrient"><option value="auto">Automatico (in base allo schermo)</option><option value="wide">Orizzontale: tutto in uno schermo (monitor 16:9)</option><option value="tall">Verticale: pannelli uno sotto l'altro (tablet, telefono)</option></select>
+      <label for="setWideLay">Teleprompter nella vista orizzontale</label><select id="setWideLay"><option value="center">Al centro (webcam sopra il centro del monitor)</option><option value="left">A sinistra</option><option value="right">A destra</option></select>
     </div>
     <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (barre orizzontali, comodo su tablet)</option></select></div>
     <h3 style="font-size:13px">DISPOSIZIONE DEI PANNELLI</h3>
@@ -645,12 +737,14 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
 </div>
 
 <input type="file" id="fileOvBg" accept="image/*" hidden>
+<input type="file" id="fileOvBgv" accept="video/*" hidden>
 <input type="file" id="fileOvLogo" accept="image/png,image/*" hidden>
 <input type="file" id="fileOnair" accept=".onair,application/octet-stream" hidden>
 <input type="file" id="fileScript" accept=".txt,.md,text/plain" hidden>
 <input type="file" id="fileIntro" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" hidden>
 <input type="file" id="fileBg" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple hidden>
 <input type="file" id="fileCap" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" multiple hidden>
+<div class="syncbar" id="syncBanner" hidden><span id="syncBannerTxt"></span><button id="syncBannerGo" class="main-act">⬇ Carica</button><button id="syncBannerNo">Più tardi</button></div>
 <div class="toast" id="toast" hidden></div>
 
 <script src="lib/lame.min.js"></script>

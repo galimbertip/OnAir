@@ -1,4 +1,4 @@
-# GPverse OnAir V3.0.0 — Come si usa
+# GPverse OnAir V3.3.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -54,5 +54,11 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 
 ## Video per YouTube
 **Inquadratura con green screen:** nel riquadro VIDEO premi «🎯 Scegli il verde» e clicca sul telo, poi «Green screen». Se si vede qualcosa oltre il telo, premi «✂ Scegli area» e trascina un rettangolo attorno a te e al telo: il resto diventa nero. Con «Ingrandisci area» l'area riempie lo schermo.
+
+**Green screen virtuale (senza telo):** nel riquadro VIDEO premi «🎬 Registra la scena vuota» ed esci dall'inquadratura entro 5 secondi (porta via anche la sedia, se vuoi che sparisca). Quando rientri si vede solo ciò che è nuovo: tu, un ospite, un oggetto. Regola «Sensibilità» se sparisce un pezzo di te (abbassala) o resta qualcosa della stanza (alzala). Funziona meglio con luce costante, webcam ferma e vestiti di colore diverso dal muro. In «Sfondo, logo e Iscriviti» scegli cosa mettere al posto della stanza (nero, sfocato, immagine o video) e lascia spuntato «Anche dietro di te».
+
+**Vista orizzontale:** su un monitor 16:9 OnAir dispone tutto affiancato, senza scorrere, sia in registrazione sia nel montaggio. In Impostazioni → Vista scegli automatica, orizzontale o verticale e dove mettere il video.
+
+**Stesse impostazioni su più PC:** Impostazioni → Sincronizzazione. Una volta sola: crea su GitHub un repository **privato** (es. `onair-sync`) e un token «fine-grained» con accesso solo a quel repository e permesso «Contents: Read and write». Inserisci repository e token su ogni dispositivo, scegli cosa sincronizzare, poi «⬆ Invia» dal PC dove hai preparato la puntata e «⬇ Ricevi» sull'altro (all'avvio OnAir ti avvisa da solo se c'è qualcosa di più recente).
 
 Il video si registra con l'effetto già applicato (regoli contorni, disturbo e colore nel riquadro VIDEO). In Sessioni scegli **Video WebM per YouTube** come formato. Tieni OnAir in primo piano mentre registri. Serve Chrome o Edge (Firefox registra solo l'audio se non supporta il video).
