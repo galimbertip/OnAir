@@ -3,9 +3,15 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.3.0' };
+const APP = { name: 'GPverse OnAir', version: '3.3.1' };
 
 const CHANGELOG = [
+  { v: '3.3.1', date: '14/11/2026', title: 'Vista orizzontale senza tagli', items: [
+    'Corretto: in vista orizzontale video, sottofondo e capitoli venivano tagliati in altezza.',
+    'L\'anteprima video si rimpicciolisce per stare nel riquadro; i comandi video scorrono sotto.',
+    'Sottofondo e capitoli hanno più spazio (la sigla occupa solo quello che serve) e i pulsanti restano sempre visibili.',
+    'Mixer più basso: fader adattati all\'altezza dello schermo, «Ingresso mic» su una riga, «Gain ed EQ» si apre sopra la fonte senza allungare il mixer.'
+  ] },
   { v: '3.3.0', date: '14/11/2026', title: 'Green screen virtuale e sfondi dietro di te', items: [
     'Green screen virtuale: «🎬 Registra la scena vuota», esci dall\'inquadratura per qualche secondo e OnAir memorizza la stanza. Poi si vede solo ciò che è nuovo: tu, un ospite, un oggetto.',
     'Sensibilità regolabile; esposizione, bilanciamento del bianco e messa a fuoco della webcam vengono bloccati se la webcam lo permette.',
@@ -2605,7 +2611,7 @@ const ORIENT = {
     const o = S.settings.orient || 'auto';
     const wide = o === 'wide' || (o === 'auto' && innerWidth >= 1180 && innerWidth / innerHeight >= 1.3);
     const changed = wide !== this.wide; this.wide = wide;
-    document.body.classList.toggle('wide', wide); document.body.classList.toggle('short', wide && innerHeight < 900); document.body.dataset.wl = S.settings.wideLay || 'center';
+    document.body.classList.toggle('wide', wide); document.body.classList.toggle('short', wide && innerHeight < 980); document.body.dataset.wl = S.settings.wideLay || 'center';
     const host = $('panels'); if (!host) return;
     if (wide) {
       host.querySelectorAll('.pnl').forEach(el => { el.hidden = el.dataset.panel === 'prompter' ? !TP.visible : false; });
@@ -2613,6 +2619,18 @@ const ORIENT = {
     } else { host.style.height = ''; if (changed) LAY.apply(S.settings.layout || 'classico'); }
     if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
     if (ED.open) { ED.resize(); ED.clampX(); ED.syncScroll(); }
+    requestAnimationFrame(() => this.fitVideo());
+  },
+  /* In orizzontale l'anteprima video si rimpicciolisce per stare nel suo riquadro (i comandi scorrono sotto) */
+  fitVideo() {
+    const card = $('vcard'), box = $('vBox'); if (!card || !box) return;
+    if (!this.wide || card.hidden) { box.style.width = ''; box.style.alignSelf = ''; return; }
+    const cs = getComputedStyle(card), px = (k) => parseFloat(cs[k]) || 0;
+    const inner = card.clientWidth - px('paddingLeft') - px('paddingRight');
+    const h2 = card.querySelector('h2').offsetHeight;
+    const avail = card.clientHeight - px('paddingTop') - px('paddingBottom') - h2 - 16 - 64;
+    const w = Math.max(200, Math.min(inner, avail * 16 / 9));
+    box.style.width = w + 'px'; box.style.alignSelf = 'center';
   }
 };
 

@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.3.1 — 14/11/2026
+- Corretto: in vista orizzontale video, sottofondo e capitoli venivano tagliati in altezza.
+- Anteprima video adattata al riquadro (i comandi scorrono sotto); sottofondo e capitoli con più spazio e pulsanti sempre visibili.
+- Mixer più basso: fader adattati all'altezza dello schermo, «Ingresso mic» su una riga, «Gain ed EQ» si apre sopra la fonte.
+
 ## V3.3.0 — 14/11/2026
 **Green screen virtuale** (scheda Video)
 - «🎬 Registra la scena vuota»: conto alla rovescia di 5 secondi, esci dall'inquadratura (porta via la sedia se vuoi farla sparire) e OnAir memorizza la stanza.

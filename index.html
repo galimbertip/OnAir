@@ -171,9 +171,9 @@ button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .exl,.exr{display:flex;flex-direction:column;gap:10px;min-width:0}
 /* ---------- Vista orizzontale: tutto in uno schermo ---------- */
 body.wide .wrap{max-width:none;gap:10px}
-body.wide #panels{display:grid;gap:12px;align-items:stretch;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,.95fr);grid-template-rows:auto minmax(0,1fr) minmax(0,1fr) auto;grid-template-areas:"transport prompter intro" "video prompter bg" "video prompter cap" "mixer mixer mixer"}
-body.wide[data-wl=left] #panels{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.95fr);grid-template-areas:"prompter transport intro" "prompter video bg" "prompter video cap" "mixer mixer mixer"}
-body.wide[data-wl=right] #panels{grid-template-columns:minmax(0,1fr) minmax(0,.95fr) minmax(0,1.35fr);grid-template-areas:"transport intro prompter" "video bg prompter" "video cap prompter" "mixer mixer mixer"}
+body.wide #panels{display:grid;gap:12px;align-items:stretch;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,.95fr);grid-template-rows:auto auto minmax(0,1fr) minmax(0,1fr) auto;grid-template-areas:"transport prompter intro" "transport prompter bg" "video prompter bg" "video prompter cap" "mixer mixer mixer"}
+body.wide[data-wl=left] #panels{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.95fr);grid-template-areas:"prompter transport intro" "prompter transport bg" "prompter video bg" "prompter video cap" "mixer mixer mixer"}
+body.wide[data-wl=right] #panels{grid-template-columns:minmax(0,1fr) minmax(0,.95fr) minmax(0,1.35fr);grid-template-areas:"transport intro prompter" "transport bg prompter" "video bg prompter" "video cap prompter" "mixer mixer mixer"}
 body.wide #panels>.pnl{width:auto!important;min-height:0;overflow:auto;order:0!important}
 body.wide [data-panel=transport]{grid-area:transport} body.wide [data-panel=prompter]{grid-area:prompter} body.wide [data-panel=video]{grid-area:video}
 body.wide [data-panel=intro]{grid-area:intro} body.wide [data-panel=bg]{grid-area:bg} body.wide [data-panel=cap]{grid-area:cap} body.wide [data-panel=mixer]{grid-area:mixer}
@@ -186,7 +186,7 @@ body.wide .prompter .pt-edit{flex:1;min-height:0}
 body.wide .prompter .pt-edit textarea{height:100%!important;min-height:120px}
 body.wide .card{gap:8px;padding:12px}
 body.wide .card .note{display:none}
-body.wide .card .list{max-height:none;flex:1;min-height:56px}
+body.wide .card .list{max-height:none;flex:1 1 auto;min-height:36px}
 body.wide #cardIntro .fname{padding:7px 10px}
 body.wide .vcard{padding:12px}
 body.wide #panels>.vcard{display:flex;flex-direction:column;overflow:hidden}
@@ -194,21 +194,24 @@ body.wide .vcard>.vbox{flex:none}
 body.wide .vcard>.vctl{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
 body.wide .mixer{padding:10px 12px;gap:6px}
 body.wide .mixer>.note{display:none}
-body.wide .strips.console .cs-main{height:118px}
-body.wide .strips.console .eqc{height:26px}
+body.wide .strips.console .cs-main{height:clamp(56px,calc(100vh - 820px),118px)}
+body.wide .strips.console .eqc{display:none}
+body.wide .strips.console .strip{position:relative;gap:6px;padding:8px 10px}
+body.wide .strips.console .inmic{flex-direction:row;align-items:center;gap:6px;width:100%}
+body.wide .strips.console .inmic .fl{display:inline;font-size:10px;white-space:nowrap}
+body.wide #liveStrips details.eq[open]{position:absolute;left:0;right:0;top:0;bottom:0;z-index:20;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;overflow:auto;box-shadow:0 -8px 24px rgba(0,0,0,.5)}
+body.wide .card{display:flex;flex-direction:column}
+body.wide .card .list{min-height:36px;overflow:auto}
 body.wide #liveStrips.console{grid-template-columns:repeat(5,minmax(0,1fr))}
 body.wide .keys{display:none}
 body.wide .foot{display:none}
 body.wide.short #panels{gap:8px}
 body.wide.short .strips.console .eqc{display:none}
-body.wide.short .strips.console .cs-main{height:64px}
 body.wide.short .mixer{padding:8px 10px;gap:4px}
 body.wide.short .tc{font-size:30px;padding:4px 10px}
 body.wide.short .tbtns button{min-height:38px;flex-basis:90px}
 body.wide.short .card,body.wide.short .vcard{padding:8px 10px;gap:6px}
 body.wide.short .card .list{min-height:34px}
-body.wide.short .strips.console .inmic{display:flex;align-items:center;gap:6px;margin:0}
-body.wide.short .strips.console .inmic .fl{white-space:nowrap;font-size:10px}
 body.wide.short .strips.console .strip{gap:4px;padding:6px 8px}
 body.wide.short .strip details.eq>summary{padding:2px 0}
 body.wide #sessModal .sheet{width:min(1680px,100%)}
@@ -408,7 +411,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.3.0</span>
+    <span class="ver" id="bootVer">V3.3.1</span>
   </div>
 </div>
 
@@ -416,7 +419,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.3.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.3.1</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -565,7 +568,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.3.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.3.1</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
