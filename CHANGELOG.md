@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.5.1 — 14/11/2026
+- Corretto: entrando nell'inquadratura ricompariva tutta la stanza (la webcam cambia da sola esposizione e bilanciamento del bianco). Ora il cambio di luce viene misurato e compensato.
+- Confronto su immagine sfocata e basato sul colore (meno sensibile a rumore, messa a fuoco, tremolii e ombre leggere); pulizia dei puntini isolati.
+- «👁 Vedi cosa resta» e cursore «Pulizia» (prima «Sensibilità»). Anteprima visibile con «⚙ Regola» aperto. Avviso se la webcam cambia formato.
+
 ## V3.5.0 — 14/11/2026
 - Set di pannelli personalizzabili anche in vista orizzontale: colonna (sinistra, centro, destra, in basso), ordine, visibilità e larghezza delle colonne.
 - Ogni set ricorda una disposizione orizzontale e una verticale.

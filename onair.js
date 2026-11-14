@@ -3,9 +3,17 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.5.0' };
+const APP = { name: 'GPverse OnAir', version: '3.5.1' };
 
 const CHANGELOG = [
+  { v: '3.5.1', date: '14/11/2026', title: 'Green screen virtuale più robusto', items: [
+    'Corretto: entrando nell\'inquadratura ricompariva tutta la stanza, perché la webcam cambia da sola esposizione e bilanciamento del bianco. Ora OnAir misura il cambio di luce e lo compensa.',
+    'Confronto su immagine leggermente sfocata e basato sul colore: non scattano più rumore, messa a fuoco e piccoli tremolii; le ombre leggere contano meno.',
+    'Pulizia automatica dei puntini isolati.',
+    '«👁 Vedi cosa resta»: bianco = resta, rosso = tolto, per regolare il cursore «Pulizia» (prima «Sensibilità»: più alto toglie di più).',
+    'Con «⚙ Regola» aperto l\'anteprima resta visibile sopra i comandi.',
+    'Avviso se la webcam ha cambiato formato dopo la registrazione della scena vuota.'
+  ] },
   { v: '3.5.0', date: '14/11/2026', title: 'Disposizione personalizzabile anche in orizzontale', items: [
     'In vista orizzontale i set di pannelli si personalizzano di nuovo: per ogni pannello scegli colonna (sinistra, centro, destra o in basso a tutta larghezza), ordine e visibilità.',
     'Larghezza di ogni colonna: stretta, media, larga, molto larga. Le colonne vuote spariscono.',
@@ -235,7 +243,7 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.12 } },
+  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.15 } },
   names: new Map()
 };
 async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); SYNC.changed(); }
@@ -1029,7 +1037,9 @@ float edge(vec2 uv){
   float gx = -tl-2.*l-bl+tr+2.*r+br; float gy = -bl-2.*b-br+tl+2.*t+tr;
   return length(vec2(gx,gy));
 }
+uniform float u_dbg;
 void main(){
+  if (u_dbg > 0.5) { vec2 fd = toFrame(v_uv); float ad = u_has > 0.5 ? alphaAt(toCam(fd)) : 0.0; gl_FragColor = vec4(mix(vec3(0.5,0.0,0.15), vec3(1.0), ad) * inMask(fd), 1.0); return; }
   if (u_fx < 0.5 && u_has > 0.5) {
     vec2 f0 = toFrame(v_uv); vec2 cu0 = toCam(f0); vec3 c0 = texture2D(u_tex, cu0).rgb; float im0 = inMask(f0);
     float a0 = im0 > 0.5 ? alphaAt(cu0) : 1.0;
@@ -1067,11 +1077,25 @@ void main(){
   col += (rnd(v_uv * (u_time + 1.0)) - 0.5) * 0.07 * u_gl;
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`;
+/* Differenza tra un pixel e la scena vuota: colore (poco sensibile alla luce) + luminosità relativa */
+function vbgDiff(cr, cg, cb, br, bg, bb) {
+  const Lc = cr * 0.299 + cg * 0.587 + cb * 0.114, Lb = br * 0.299 + bg * 0.587 + bb * 0.114;
+  const sc = cr + cg + cb + 3, sb = br + bg + bb + 3;
+  const x = cr / sc - br / sb, y = cg / sc - bg / sb, z = cb / sc - bb / sb;
+  const lw = Math.min(1, Math.max(Lc, Lb) / 60);
+  return Math.max(Math.sqrt(x * x + y * y + z * z) * 2.2 * lw, Math.abs(Lc - Lb) / (Lb + 20) * 0.45);
+}
 const MFRAG = `
 precision mediump float;
 varying vec2 v_uv;
 uniform sampler2D u_tex; uniform sampler2D u_bgt; uniform vec2 u_px;
-uniform float u_key; uniform float u_kmode; uniform float u_tol; uniform vec2 u_kc; uniform vec3 u_krgb; uniform float u_vbg; uniform float u_vtol;
+uniform float u_key; uniform float u_kmode; uniform float u_tol; uniform vec2 u_kc; uniform vec3 u_krgb; uniform float u_vbg; uniform float u_vtol; uniform vec3 u_gain;
+float vdiff(vec3 c, vec3 b){
+  float Lc = dot(c, vec3(0.299,0.587,0.114)), Lb = dot(b, vec3(0.299,0.587,0.114));
+  vec3 nc = c / (c.r + c.g + c.b + 0.012), nb = b / (b.r + b.g + b.b + 0.012);
+  float lw = min(1.0, max(Lc, Lb) / 0.235);
+  return max(length(nc - nb) * 2.2 * lw, abs(Lc - Lb) / (Lb + 0.078) * 0.45);
+}
 vec2 cbcr(vec3 c){ return vec2(-0.1687*c.r - 0.3313*c.g + 0.5*c.b, 0.5*c.r - 0.4187*c.g - 0.0813*c.b); }
 void main(){
   float a = 1.0;
@@ -1081,12 +1105,13 @@ void main(){
     else a *= smoothstep(u_tol, u_tol + 0.06, distance(cbcr(c), u_kc));
   }
   if (u_vbg > 0.5) {
-    float acc = 0.0;
-    for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
+    vec3 sc = vec3(0.0), sb = vec3(0.0);
+    for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) {
       vec2 o = vec2(float(i), float(j)) * u_px * 3.0;
-      acc += length(texture2D(u_tex, v_uv + o).rgb - texture2D(u_bgt, v_uv + o).rgb);
+      sc += texture2D(u_tex, v_uv + o).rgb; sb += texture2D(u_bgt, v_uv + o).rgb;
     }
-    acc = acc / 9.0 / 1.732;
+    float acc = vdiff(sc / 25.0, min(sb / 25.0 * u_gain, vec3(1.0)));
+    vec2 e = step(vec2(0.004), v_uv) * step(v_uv, vec2(0.996)); acc *= e.x * e.y;
     a *= smoothstep(u_vtol, u_vtol + 0.07, acc);
   }
   gl_FragColor = vec4(a, a, a, 1.0);
@@ -1146,18 +1171,37 @@ const C2D = {
     if (fg.vbg) {
       const sw = this.sw, sh = this.sh, key = fg.view.join(',') + '|' + vs.mirror + '|' + CAM.bgStamp;
       if (this.bgKey !== key) { const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g2 = c.getContext('2d', { willReadFrequently: true }); this.drawView(g2, CAM.bgCanvas, sw, sh, fg.view, vs.mirror); this.bgData = g2.getImageData(0, 0, sw, sh).data; this.bgKey = key; }
-      const B = this.bgData, D = this.D, vt = vs.vtol ?? 0.12;
-      for (let i = 0, j = 0; i < n; i++, j += 4) { const dr = d[j] - B[j], dg = d[j + 1] - B[j + 1], db = d[j + 2] - B[j + 2]; D[i] = Math.sqrt(dr * dr + dg * dg + db * db) / 441; }
+      const D = this.D, vt = vs.vtol ?? 0.15, G = CAM.gain, qw = 120, qh = 68;
+      // Confronto su immagini rimpicciolite (quindi sfocate): non scattano rumore, messa a fuoco e piccoli tremolii
+      if (!this.qc) { this.qc = document.createElement('canvas'); this.qc.width = qw; this.qc.height = qh; this.qg = this.qc.getContext('2d', { willReadFrequently: true }); this.Dq = new Float32Array(qw * qh); }
+      if (this.bqKey !== key) { this.qg.imageSmoothingQuality = 'high'; this.drawView(this.qg, CAM.bgCanvas, qw, qh, fg.view, vs.mirror); this.bq = this.qg.getImageData(0, 0, qw, qh).data.slice(); this.bqKey = key; }
+      this.qg.drawImage(this.small, 0, 0, qw, qh); const q = this.qg.getImageData(0, 0, qw, qh).data, Bq = this.bq, Dq = this.Dq;
+      for (let i = 0, j = 0; i < Dq.length; i++, j += 4) Dq[i] = vbgDiff(q[j], q[j + 1], q[j + 2], Bq[j] * G[0], Bq[j + 1] * G[1], Bq[j + 2] * G[2]);
+      for (let y = 0, i = 0; y < sh; y++) { const fy = Math.min(qh - 1.001, Math.max(0, (y + 0.5) * qh / sh - 0.5)), y0 = fy | 0, ty = fy - y0;
+        for (let x = 0; x < sw; x++, i++) { const fx = Math.min(qw - 1.001, Math.max(0, (x + 0.5) * qw / sw - 0.5)), x0 = fx | 0, tx = fx - x0, k = y0 * qw + x0;
+          D[i] = (Dq[k] * (1 - tx) + Dq[k + 1] * tx) * (1 - ty) + (Dq[k + qw] * (1 - tx) + Dq[k + qw + 1] * tx) * ty; } }
+      if (!this.M || this.M.length !== n) { this.M = new Float32Array(n); this.M2 = new Float32Array(n); }
+      const M = this.M, M2 = this.M2; M.fill(0);
       for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) {
         const i = y * sw + x; const v = (D[i - sw - 1] + D[i - sw] + D[i - sw + 1] + D[i - 1] + D[i] + D[i + 1] + D[i + sw - 1] + D[i + sw] + D[i + sw + 1]) / 9;
-        const a = v <= vt ? 0 : v >= vt + 0.07 ? 1 : (v - vt) / 0.07; A[i] *= a;
+        M[i] = v <= vt ? 0 : v >= vt + 0.07 ? 1 : (v - vt) / 0.07;
       }
+      // Pulizia: toglie i puntini isolati (erosione) e poi riallarga la sagoma (dilatazione)
+      M2.fill(0);
+      for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) { const i = y * sw + x; M2[i] = Math.min(M[i], M[i - 1], M[i + 1], M[i - sw], M[i + sw]); }
+      for (let y = 1; y < sh - 1; y++) for (let x = 1; x < sw - 1; x++) { const i = y * sw + x; A[i] *= Math.max(M2[i], M2[i - 1], M2[i + 1], M2[i - sw], M2[i + sw], M2[i - sw - 1], M2[i - sw + 1], M2[i + sw - 1], M2[i + sw + 1]); }
+      for (let x = 0; x < sw; x++) { A[x] = 0; A[(sh - 1) * sw + x] = 0; } for (let y = 0; y < sh; y++) { A[y * sw] = 0; A[y * sw + sw - 1] = 0; }
     }
     return A;
   },
   render(t, video, has, fresh, vs) {
     const g = this.g, W = this.cv.width, H = this.cv.height, sw = this.sw, sh = this.sh;
     const fg = frameGeom(), keyed = fg.key || fg.vbg;
+    if (CAM.dbg && keyed && has) {
+      this.drawView(this.sg, video, sw, sh, fg.view, vs.mirror); const A = this.alphaMask(this.sg.getImageData(0, 0, sw, sh).data, fg, vs);
+      const o = this.img.data; for (let i = 0, k = 0; i < A.length; i++, k += 4) { o[k] = 128 + 127 * A[i]; o[k + 1] = 255 * A[i]; o[k + 2] = 38 + 217 * A[i]; o[k + 3] = 255; }
+      this.eg.putImageData(this.img, 0, 0); this.maskOut(this.eg, sw, sh, fg.view, fg.mask); g.clearRect(0, 0, W, H); g.drawImage(this.edge, 0, 0, W, H); return;
+    }
     if (has && vs.fx === false) {
       g.clearRect(0, 0, W, H); this.drawView(g, video, W, H, fg.view, vs.mirror);
       if (keyed) {
@@ -1228,11 +1272,11 @@ const CAM = {
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-    for (const n of ['u_tex', 'u_px', 'u_scale', 'u_off', 'u_res', 'u_time', 'u_thr', 'u_gl', 'u_mirror', 'u_has', 'u_col', 'u_fx', 'u_mask', 'u_view', 'u_mtex', 'u_usemask']) this.u[n] = gl.getUniformLocation(p, n);
+    for (const n of ['u_tex', 'u_px', 'u_scale', 'u_off', 'u_res', 'u_time', 'u_thr', 'u_gl', 'u_mirror', 'u_has', 'u_col', 'u_fx', 'u_mask', 'u_view', 'u_mtex', 'u_usemask', 'u_dbg']) this.u[n] = gl.getUniformLocation(p, n);
     gl.uniform1i(this.u.u_tex, 0); gl.uniform1i(this.u.u_mtex, 1);
     // Secondo passaggio: maschera "cosa resta" (green screen e scena vuota) a bassa risoluzione, poi letta sfumata
     const mp = gl.createProgram(); gl.attachShader(mp, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(mp, sh(gl.FRAGMENT_SHADER, MFRAG)); gl.linkProgram(mp); this.mprog = mp; this.mu = {};
-    for (const n of ['u_tex', 'u_bgt', 'u_px', 'u_key', 'u_kmode', 'u_tol', 'u_kc', 'u_krgb', 'u_vbg', 'u_vtol']) this.mu[n] = gl.getUniformLocation(mp, n);
+    for (const n of ['u_tex', 'u_bgt', 'u_px', 'u_key', 'u_kmode', 'u_tol', 'u_kc', 'u_krgb', 'u_vbg', 'u_vtol', 'u_gain']) this.mu[n] = gl.getUniformLocation(mp, n);
     gl.useProgram(mp); gl.uniform1i(this.mu.u_tex, 0); gl.uniform1i(this.mu.u_bgt, 2); gl.useProgram(p);
     const mkTex = (w, h) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); return t; };
     this.MW = 480; this.MH = 270; this.mtex = mkTex(this.MW, this.MH); this.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.mtex, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1276,7 +1320,7 @@ const CAM = {
     c.toBlob((b) => { if (b) DB.put('files', 'vbg-scene', { name: 'scena vuota', type: 'image/png', blob: b, t: this.bgStamp }); }, 'image/png');
   },
   setScene(canvas, stamp) {
-    this.bgCanvas = canvas; this.bgStamp = stamp;
+    this.bgCanvas = canvas; this.bgStamp = stamp; this.aspWarn = false; this.gain = [1, 1, 1]; this.gbKey = null;
     if (this.gl) { const gl = this.gl; gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.bgtex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex); }
   },
   async loadScene() {
@@ -1303,7 +1347,29 @@ const CAM = {
     for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
     const h = (n) => Math.round(n / 25).toString(16).padStart(2, '0'); return '#' + h(r) + h(gg) + h(b);
   },
+  gain: [1, 1, 1], gainT: 0,
+  /* Compensa esposizione e bilanciamento del bianco automatici: guadagno per canale tra fotogramma attuale e scena vuota.
+     Si usa la moda (non la media) dei rapporti, così la persona in primo piano non falsa la stima. */
+  updGain() {
+    const now = performance.now(); if (now - this.gainT < 150 || !this.bgCanvas || !this.video.videoWidth) return; this.gainT = now;
+    if (!this.gs) { this.gs = document.createElement('canvas'); this.gs.width = 64; this.gs.height = 36; this.gg = this.gs.getContext('2d', { willReadFrequently: true }); }
+    if (this.gbKey !== this.bgStamp) { this.gg.drawImage(this.bgCanvas, 0, 0, 64, 36); this.gbd = this.gg.getImageData(0, 0, 64, 36).data.slice(); this.gbKey = this.bgStamp; }
+    this.gg.drawImage(this.video, 0, 0, 64, 36); const c = this.gg.getImageData(0, 0, 64, 36).data, b = this.gbd;
+    for (let k = 0; k < 3; k++) {
+      const H = new Float32Array(81), S2 = new Float32Array(81); let cnt = 0;
+      for (let j = k; j < c.length; j += 4) { if (b[j] < 14 || b[j] > 245 || c[j] < 6 || c[j] > 250) continue; const lr = Math.log2(c[j] / b[j]); if (lr < -1 || lr > 1) continue; const bi = Math.round((lr + 1) * 40); H[bi]++; S2[bi] += lr; cnt++; }
+      if (cnt < 60) continue;
+      let best = 1, bv = -1; for (let i = 1; i < 80; i++) { const v = H[i - 1] + H[i] + H[i + 1]; if (v > bv) { bv = v; best = i; } }
+      const g = Math.pow(2, (S2[best - 1] + S2[best] + S2[best + 1]) / Math.max(1, bv));
+      this.gain[k] = Math.max(0.5, Math.min(2, this.gain[k] * 0.6 + g * 0.4));
+    }
+  },
   render(t) {
+    if (S.settings.video.vbg && this.bgCanvas && this.ok) {
+      this.updGain();
+      const va = this.video.videoWidth / this.video.videoHeight, ba = this.bgCanvas.width / this.bgCanvas.height;
+      if (va && Math.abs(va - ba) > 0.02 && !this.aspWarn) { this.aspWarn = true; toast('La webcam ha cambiato formato da quando hai registrato la scena vuota: registrala di nuovo'); }
+    }
     if (this.mode === '2d') {
       const has = this.ok && this.video.readyState >= 2 && this.video.videoWidth > 0;
       const fresh = this.fresh || !this.rvfc; if (has && !this.rvfc) this.camFrames++;
@@ -1329,13 +1395,13 @@ const CAM = {
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.bgtex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
       gl.uniform2f(this.mu.u_px, 1 / this.video.videoWidth, 1 / this.video.videoHeight);
       gl.uniform1f(this.mu.u_key, fg0.key ? 1 : 0); gl.uniform1f(this.mu.u_kmode, isNeutral(rgb) ? 1 : 0); gl.uniform1f(this.mu.u_tol, vs.tol ?? 0.09); gl.uniform2f(this.mu.u_kc, kc[0], kc[1]); gl.uniform3f(this.mu.u_krgb, rgb[0], rgb[1], rgb[2]);
-      gl.uniform1f(this.mu.u_vbg, fg0.vbg ? 1 : 0); gl.uniform1f(this.mu.u_vtol, vs.vtol ?? 0.12);
+      gl.uniform1f(this.mu.u_vbg, fg0.vbg ? 1 : 0); gl.uniform1f(this.mu.u_vtol, vs.vtol ?? 0.15); gl.uniform3f(this.mu.u_gain, ...this.gain);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(this.prog);
       gl.enableVertexAttribArray(this.ploc); gl.vertexAttribPointer(this.ploc, 2, gl.FLOAT, false, 0, 0);
     }
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.mtex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
-    gl.uniform1f(this.u.u_usemask, useMask ? 1 : 0);
+    gl.uniform1f(this.u.u_usemask, useMask ? 1 : 0); gl.uniform1f(this.u.u_dbg, this.dbg && useMask ? 1 : 0);
     gl.uniform2f(this.u.u_scale, sx, sy); gl.uniform2f(this.u.u_off, (1 - sx) / 2, (1 - sy) / 2);
     gl.uniform2f(this.u.u_res, W, H); gl.uniform1f(this.u.u_time, t / 1000);
     gl.uniform1f(this.u.u_thr, vs.thr); gl.uniform1f(this.u.u_gl, vs.gl); gl.uniform1f(this.u.u_mirror, vs.mirror ? 1 : 0); gl.uniform1f(this.u.u_has, has ? 1 : 0); gl.uniform1f(this.u.u_fx, vs.fx === false ? 0 : 1);
@@ -2657,12 +2723,15 @@ const ORIENT = {
     const cs = getComputedStyle(card), px = (k) => parseFloat(cs[k]) || 0;
     const inner = card.clientWidth - px('paddingLeft') - px('paddingRight');
     const h2 = card.querySelector('h2').offsetHeight;
-    const avail = card.clientHeight - px('paddingTop') - px('paddingBottom') - h2 - 12;
+    const adj = card.classList.contains('adj'), full = card.clientHeight - px('paddingTop') - px('paddingBottom') - h2 - 12;
+    const avail = adj ? Math.max(full * 0.45, full - 300) : full;
     const w = Math.max(200, Math.min(inner, avail * 16 / 9));
     box.style.width = w + 'px'; box.style.alignSelf = 'center';
+    // Con «Regola» aperto i comandi stanno sotto l'anteprima, che resta visibile mentre regoli
+    const ctl = card.querySelector('.vctl'); if (ctl) ctl.style.top = adj ? (box.offsetTop + w * 9 / 16 + 8) + 'px' : '';
   },
   /* Vista orizzontale: i comandi video stanno in un pannello «⚙ Regola» sopra l'anteprima */
-  adjust(on) { const c = $('vcard'); if (!c) return; c.classList.toggle('adj', !!on); $('vAdjust').setAttribute('aria-pressed', String(!!on)); }
+  adjust(on) { const c = $('vcard'); if (!c) return; c.classList.toggle('adj', !!on); $('vAdjust').setAttribute('aria-pressed', String(!!on)); requestAnimationFrame(() => this.fitVideo()); }
 };
 
 /* Disposizione dei pannelli */
@@ -3018,7 +3087,8 @@ function wire() {
     $('vAreaReset').disabled = !vs.mask; $('vKey').setAttribute('aria-pressed', String(!!vs.key));
     $('vKc').style.background = vs.kc || '#33b34d'; $('vTol').value = vs.tol ?? 0.09; $('vTolO').textContent = Math.round((vs.tol ?? 0.09) * 100);
     $('vVbg').setAttribute('aria-pressed', String(!!vs.vbg && !!CAM.bgCanvas)); $('vVbg').disabled = !CAM.bgCanvas;
-    $('vVtol').value = vs.vtol ?? 0.12; $('vVtolO').textContent = Math.round((vs.vtol ?? 0.12) * 100);
+    $('vVtol').value = vs.vtol ?? 0.15; $('vVtolO').textContent = Math.round((vs.vtol ?? 0.15) * 100);
+    $('vDbg').setAttribute('aria-pressed', String(!!CAM.dbg)); $('vDbg').disabled = !(vs.key || (vs.vbg && CAM.bgCanvas));
     $('vScene').textContent = CAM.bgCanvas ? '🎬 Registra di nuovo la scena vuota' : '🎬 Registra la scena vuota';
   };
   syncFrameUI();
@@ -3059,6 +3129,7 @@ function wire() {
   $('vKey').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva il green screen a registrazione ferma'); vs.key = !vs.key; saveSettings(); syncFrameUI(); if (vs.key && !vs.kcPicked) toast('Per un risultato migliore premi «Scegli il verde» e clicca sul telo'); });
   $('vTol').addEventListener('input', (e) => { vs.tol = +e.target.value; saveSettings(); syncFrameUI(); });
   $('vVtol').addEventListener('input', (e) => { vs.vtol = +e.target.value; saveSettings(); syncFrameUI(); });
+  $('vDbg').addEventListener('click', () => { CAM.dbg = !CAM.dbg; syncFrameUI(); if (CAM.dbg) toast('Bianco = resta, rosso scuro = tolto. Muovi «Pulizia» finché la stanza è tutta rossa e tu tutto bianco'); });
   $('vVbg').addEventListener('click', async () => {
     if (isRec() || blocked()) return toast('Attiva il green screen virtuale a registrazione ferma');
     if (!CAM.bgCanvas) return toast('Prima registra la scena vuota');
