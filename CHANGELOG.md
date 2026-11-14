@@ -7,6 +7,9 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.0.1 — 14/11/2026
+- Corretto: un segnale lanciato all'avvio della registrazione (es. [SIGLA] appena sotto la riga di lettura) ripartiva quando il testo lo raggiungeva. Ora resta lanciato.
+
 ## V4.0.0 — 14/11/2026
 **Categorie audio a piacere** (Impostazioni → Categorie audio)
 - Categorie con nome, colore, comportamento (Singolo, In loop, Stacchetti), «ferma i loop», «capitoli YouTube», segnale nel teleprompter.

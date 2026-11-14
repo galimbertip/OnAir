@@ -3,9 +3,12 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.0.0' };
+const APP = { name: 'GPverse OnAir', version: '4.0.1' };
 
 const CHANGELOG = [
+  { v: '4.0.1', date: '14/11/2026', title: 'Sigla lanciata una volta sola', items: [
+    'Corretto: con [SIGLA] appena sotto la riga di lettura la sigla partiva all\'avvio della registrazione e poi di nuovo quando il testo, scorrendo, raggiungeva il segnale. Ora un segnale partito all\'avvio non riparte più.'
+  ] },
   { v: '4.0.0', date: '14/11/2026', title: 'Categorie audio a piacere', items: [
     'Non più solo Sigla, Sottofondo e Capitoli: in Impostazioni → Categorie audio crei tutte le categorie che vuoi (applausi, pubblicità, effetti, chiusura…), con nome, colore e comportamento.',
     'Tre comportamenti: Singolo (un brano, suona una volta), In loop (lista che gira, pausa e ripresa), Stacchetti (lista da lanciare uno alla volta). Per ognuna scegli se «ferma i loop» mentre suona e se crea capitoli YouTube.',
@@ -2097,7 +2100,7 @@ const TP = {
   },
   lineY() { return this.view.clientHeight * 0.3; },
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
-  syncFired() { const ly = this.lineY(); for (const c of this.cues) c.dataset.fired = this.cueY(c) <= ly ? '1' : '0'; },
+  syncFired() { const ly = this.lineY(); for (const c of this.cues) c.dataset.fired = (this.cueY(c) <= ly || c.dataset.pre === '1') ? '1' : '0'; },
   setTop(y) { this.view.scrollTop = y; this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); VF.resync(); },
   toggle() { this.running = !this.running; this.lastT = performance.now(); this.layout(); },
   nudge(dir) { if (!this.view) return; this.push = (this.push || 0) + dir * this.size * 1.45 * 0.6; },
@@ -2127,6 +2130,7 @@ const TP = {
       const ly = this.lineY();
       for (const c of this.cues) {
         const y = this.cueY(c);
+        if (c.dataset.pre === '1') { if (y <= ly) delete c.dataset.pre; continue; }
         if (c.dataset.fired !== '1' && y <= ly) { c.dataset.fired = '1'; this.fire(c); }
         else if (c.dataset.fired === '1' && y > ly + 4) c.dataset.fired = '0';
       }
@@ -2151,7 +2155,7 @@ const TP = {
   onRecStart() {
     this.syncFired();
     // segnali appena sopra la riga di lettura (es. [SIGLA] prima del titolo): sono «adesso», quindi partono con la registrazione
-    if (this.auto) { const ly = this.lineY(), lh = this.size * 1.45; for (const c of this.cues) { const y = this.cueY(c); if (y <= ly + lh * 0.6 && y > ly - lh * 1.9) { c.dataset.fired = '1'; this.fire(c); } } }
+    if (this.auto) { const ly = this.lineY(), lh = this.size * 1.45; for (const c of this.cues) { const y = this.cueY(c); if (y <= ly + lh * 0.6 && y > ly - lh * 1.9) { c.dataset.fired = '1'; if (y > ly) c.dataset.pre = '1'; this.fire(c); } } }
     const fs = firstSingle(), go = this.startMode === 'rec' || (this.startMode === 'intro' && !(fs && dk(fs.id)));
     if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); }
     this.layout();
@@ -2168,7 +2172,7 @@ const TP = {
     if (y != null) this.setTop(y);
     this.running = run != null ? run : this.wasRunning; this.lastT = performance.now(); this.layout();
   },
-  onFinish() { this.running = false; this.pendingLoops.clear(); VF.stop(); this.layout(); HELP.onFinish(); },
+  onFinish() { this.running = false; this.pendingLoops.clear(); for (const c of this.cues || []) delete c.dataset.pre; VF.stop(); this.layout(); HELP.onFinish(); },
   edit(on) {
     $('ptEditBox').hidden = !on; $('ptView').hidden = on;
     if (on) { $('ptArea').value = this.text; $('ptArea').focus(); }
