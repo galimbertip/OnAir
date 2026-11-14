@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.5.0 — 14/11/2026
+- Set di pannelli personalizzabili anche in vista orizzontale: colonna (sinistra, centro, destra, in basso), ordine, visibilità e larghezza delle colonne.
+- Ogni set ricorda una disposizione orizzontale e una verticale.
+- «Salva modifiche» aggiorna un set personale esistente.
+
 ## V3.4.0 — 14/11/2026
 - Mixer «a barre»: una riga per fonte (indicatore, fader, ↺, MUTE, ⚙) in due colonne, livello voce di lato; base in vista orizzontale. Con più fonti scorre in verticale.
 - ⚙ apre gain, EQ e ingresso microfono in un pannello sopra la riga.

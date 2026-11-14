@@ -3,9 +3,15 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.4.0' };
+const APP = { name: 'GPverse OnAir', version: '3.5.0' };
 
 const CHANGELOG = [
+  { v: '3.5.0', date: '14/11/2026', title: 'Disposizione personalizzabile anche in orizzontale', items: [
+    'In vista orizzontale i set di pannelli si personalizzano di nuovo: per ogni pannello scegli colonna (sinistra, centro, destra o in basso a tutta larghezza), ordine e visibilità.',
+    'Larghezza di ogni colonna: stretta, media, larga, molto larga. Le colonne vuote spariscono.',
+    'Ogni set ricorda due disposizioni: una per la vista orizzontale e una per quella verticale.',
+    'Nuovo pulsante «Salva modifiche» per aggiornare un set personale senza crearne uno nuovo.'
+  ] },
   { v: '3.4.0', date: '14/11/2026', title: 'Mixer a barre e regolazioni video a comparsa', items: [
     'Nuovo mixer «a barre»: una riga per fonte (indicatore di livello, fader, ↺, MUTE, ⚙), in due colonne con il livello voce di lato. In vista orizzontale è quello di base e occupa metà spazio.',
     '⚙ apre gain, EQ e (sulla voce) ingresso del microfono in un pannello sopra la riga; si chiude con ✕ o cliccando fuori.',
@@ -2635,9 +2641,9 @@ const ORIENT = {
     document.body.classList.toggle('wide', wide); document.body.classList.toggle('short', wide && innerHeight < 980); document.body.dataset.wl = S.settings.wideLay || 'center';
     const host = $('panels'); if (!host) return;
     if (wide) {
-      host.querySelectorAll('.pnl').forEach(el => { el.hidden = el.dataset.panel === 'prompter' ? !TP.visible : false; });
+      WIDE.build(LAY.cur || LAY.all()[S.settings.layout] || LAY_PRESETS.classico);
       const top = host.getBoundingClientRect().top + scrollY; host.style.height = Math.max(520, innerHeight - top - 18) + 'px';
-    } else { host.style.height = ''; if (changed) LAY.apply(S.settings.layout || 'classico'); }
+    } else { WIDE.unbuild(); host.style.height = ''; if (changed) LAY.apply(S.settings.layout || 'classico'); }
     if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
     if (ED.open) { ED.resize(); ED.clampX(); ED.syncScroll(); }
     if (changed && this.onWide) this.onWide();
@@ -2666,6 +2672,35 @@ const LAY_PRESETS = {
   davanti: { name: 'Teleprompter davanti (sotto la webcam)', order: ['prompter', 'transport', 'video', 'cap', 'bg', 'intro', 'mixer'], w: { prompter: '1', transport: '1', video: '1/3', cap: '1/3', bg: '1/3', intro: '1/3', mixer: '1' }, hidden: [], tall: true },
   lettura: { name: 'Solo lettura', order: ['prompter', 'transport', 'cap', 'bg', 'intro', 'video', 'mixer'], w: { prompter: '1', transport: '1', cap: '1/2', bg: '1/2', intro: '1/3', video: '1/3', mixer: '1' }, hidden: ['intro', 'video', 'mixer'], tall: true }
 };
+/* Vista orizzontale: pannelli in colonne (sinistra, centro, destra) più una fascia in basso */
+const WCOLS = [['0', 'Sinistra'], ['1', 'Centro'], ['2', 'Destra'], ['b', 'In basso (tutta larghezza)']];
+const WIDE = {
+  def() {
+    const wl = S.settings.wideLay || 'center', order = ['transport', 'video', 'prompter', 'intro', 'bg', 'cap', 'mixer'];
+    const m = { center: [{ transport: '0', video: '0', prompter: '1', intro: '2', bg: '2', cap: '2' }, [1, 1.35, 0.95]], left: [{ prompter: '0', transport: '1', video: '1', intro: '2', bg: '2', cap: '2' }, [1.35, 1, 0.95]], right: [{ transport: '0', video: '0', intro: '1', bg: '1', cap: '1', prompter: '2' }, [1, 0.95, 1.35]] }[wl] || [];
+    return { order, col: { ...m[0], mixer: 'b' }, w: m[1] };
+  },
+  of(L) { const d = this.def(); const W = L && L.wide; if (!W) return d; return { order: [...W.order, ...d.order.filter(p => !W.order.includes(p))], col: { ...d.col, ...W.col }, w: W.w || d.w }; },
+  build(L) {
+    const host = $('panels'), W = this.of(L), hidden = (L && L.hidden) || [];
+    let cols = [...host.querySelectorAll(':scope>.wcol')], bot = host.querySelector(':scope>.wbot');
+    if (!cols.length) { cols = [0, 1, 2].map(() => { const d = document.createElement('div'); d.className = 'wcol'; host.append(d); return d; }); bot = document.createElement('div'); bot.className = 'wbot'; host.append(bot); }
+    const vis = [false, false, false]; let botVis = false;
+    for (const p of W.order) {
+      const el = host.querySelector(`[data-panel="${p}"]`); if (!el) continue;
+      const c = W.col[p] ?? '0', tgt = c === 'b' ? bot : cols[+c]; tgt.append(el);
+      el.hidden = hidden.includes(p) || (p === 'prompter' && !TP.visible);
+      if (!el.hidden) { if (c === 'b') botVis = true; else vis[+c] = true; }
+    }
+    cols.forEach((c, i) => { c.hidden = !vis[i]; }); bot.hidden = !botVis;
+    host.style.gridTemplateColumns = cols.map((c, i) => vis[i] ? `minmax(0,${W.w[i]}fr)` : null).filter(Boolean).join(' ') || '1fr';
+  },
+  unbuild() {
+    const host = $('panels'); if (!host.querySelector(':scope>.wcol')) return;
+    for (const [p] of PANELS) { const el = host.querySelector(`[data-panel="${p}"]`); if (el) host.append(el); }
+    host.querySelectorAll(':scope>.wcol,:scope>.wbot').forEach(d => d.remove()); host.style.gridTemplateColumns = '';
+  }
+};
 const LAY = {
   cur: null,
   all() { return { ...LAY_PRESETS, ...(S.settings.layouts || {}) }; },
@@ -2683,13 +2718,35 @@ const LAY = {
     sel.replaceChildren();
     for (const [id, L] of Object.entries(all)) { const o = document.createElement('option'); o.value = id; o.textContent = (LAY_PRESETS[id] ? '' : '★ ') + L.name; sel.append(o); }
     sel.value = S.settings.layout || 'classico';
-    $('layDel').disabled = !!LAY_PRESETS[sel.value];
+    $('layDel').disabled = $('layUpd').disabled = !!LAY_PRESETS[sel.value];
     this.edit = JSON.parse(JSON.stringify(all[sel.value] || all.classico));
     this.renderList();
   },
   renderList() {
     const E2 = this.edit, box = $('layList'); box.replaceChildren();
     const lab = (t) => { const s = document.createElement('span'); s.textContent = t; return s; };
+    const wide = ORIENT.wide; $('layMode').textContent = wide ? 'Stai modificando la vista orizzontale: per ogni pannello scegli la colonna e l\'ordine. La vista verticale si modifica da uno schermo verticale (o con Vista: verticale).' : 'Stai modificando la vista verticale: ordine e larghezza dei pannelli.';
+    $('layCols').hidden = !wide;
+    if (wide) {
+      const W = E2.wide = WIDE.of(E2);
+      W.order.forEach((p, i) => {
+        const vis = document.createElement('input'); vis.type = 'checkbox'; vis.checked = !E2.hidden.includes(p); vis.title = 'Visibile'; vis.setAttribute('aria-label', 'Mostra ' + p);
+        vis.addEventListener('change', () => { E2.hidden = E2.hidden.filter(x => x !== p); if (!vis.checked) E2.hidden.push(p); this.preview(); });
+        const c = document.createElement('select'); for (const [v, t] of WCOLS) { const o = document.createElement('option'); o.value = v; o.textContent = t; c.append(o); }
+        c.value = W.col[p] ?? '0'; c.addEventListener('change', () => { W.col[p] = c.value; this.preview(); });
+        const up = document.createElement('button'); up.textContent = '▲'; up.title = 'Sposta su'; up.disabled = i === 0; up.addEventListener('click', () => { W.order.splice(i, 1); W.order.splice(i - 1, 0, p); this.renderList(); this.preview(); });
+        const dn = document.createElement('button'); dn.textContent = '▼'; dn.title = 'Sposta giù'; dn.disabled = i === W.order.length - 1; dn.addEventListener('click', () => { W.order.splice(i, 1); W.order.splice(i + 1, 0, p); this.renderList(); this.preview(); });
+        box.append(vis, lab(PANELS.find(x => x[0] === p)[1]), c, up, dn);
+      });
+      const cb = $('layCols'); cb.replaceChildren(lab('Larghezza colonne:'));
+      ['Sinistra', 'Centro', 'Destra'].forEach((n, i) => {
+        const s2 = document.createElement('select'); s2.setAttribute('aria-label', 'Larghezza colonna ' + n);
+        for (const [v, t] of [[0.7, 'stretta'], [1, 'media'], [1.35, 'larga'], [1.8, 'molto larga']]) { const o = document.createElement('option'); o.value = v; o.textContent = n + ': ' + t; s2.append(o); }
+        const cur = W.w[i]; s2.value = [0.7, 1, 1.35, 1.8].reduce((a, b) => Math.abs(b - cur) < Math.abs(a - cur) ? b : a);
+        s2.addEventListener('change', () => { W.w = [...W.w]; W.w[i] = +s2.value; this.preview(); }); cb.append(s2);
+      });
+      return;
+    }
     E2.order.forEach((p, i) => {
       const vis = document.createElement('input'); vis.type = 'checkbox'; vis.checked = !E2.hidden.includes(p); vis.title = 'Visibile'; vis.setAttribute('aria-label', 'Mostra ' + p);
       vis.addEventListener('change', () => { E2.hidden = E2.hidden.filter(x => x !== p); if (!vis.checked) E2.hidden.push(p); this.preview(); });
@@ -2705,6 +2762,7 @@ const LAY = {
   },
   preview() { // applica subito le modifiche in prova, senza salvarle
     const host = $('panels'), L = this.edit; this.cur = L;
+    if (ORIENT.wide) { WIDE.build(L); requestAnimationFrame(() => ORIENT.fitVideo()); if (TP.view) TP.layout(); return; }
     L.order.forEach((p, i) => { const el = host.querySelector(`[data-panel="${p}"]`); if (!el) return; el.style.order = i; el.dataset.w = L.w[p] || '1'; el.hidden = L.hidden.includes(p) || (p === 'prompter' && !TP.visible); });
     $('prompter').dataset.tall = L.tall ? '1' : '0';
   },
@@ -2716,6 +2774,7 @@ const LAY = {
       S.settings.layouts[id] = { ...JSON.parse(JSON.stringify(this.edit)), name }; $('layName').value = '';
       this.apply(id); saveSettings(); this.renderSettings(); toast('Set «' + name + '» salvato');
     });
+    $('layUpd').addEventListener('click', () => { const id = $('laySel').value; if (LAY_PRESETS[id]) return; const name = S.settings.layouts[id].name; S.settings.layouts[id] = { ...JSON.parse(JSON.stringify(this.edit)), name }; this.apply(id); saveSettings(); this.renderSettings(); toast('Set «' + name + '» aggiornato'); });
     $('layDel').addEventListener('click', () => { const id = $('laySel').value; if (LAY_PRESETS[id]) return; delete S.settings.layouts[id]; this.apply('classico'); saveSettings(); this.renderSettings(); toast('Set eliminato'); });
   }
 };
@@ -2871,10 +2930,10 @@ function wire() {
   $('setNs').addEventListener('change', async (e) => { S.settings.ns = e.target.value === '1'; saveSettings(); if (R.state === 'idle') await initMic(); else toast('Vale dalla prossima registrazione'); });
   $('setDev').addEventListener('click', () => { $('setModal').hidden = true; DEV.open(); });
   LAY.wire(); LAY.apply(S.settings.layout || 'classico'); ORIENT.apply();
-  window.addEventListener('resize', () => { clearTimeout(ORIENT.t); ORIENT.t = setTimeout(() => ORIENT.apply(), 120); });
+  window.addEventListener('resize', () => { clearTimeout(ORIENT.t); ORIENT.t = setTimeout(() => { const w = ORIENT.wide; ORIENT.apply(); if (w !== ORIENT.wide) LAY.renderSettings(); }, 120); });
   $('setOrient').value = S.settings.orient || 'auto'; $('setWideLay').value = S.settings.wideLay || 'center';
-  $('setOrient').addEventListener('change', (e) => { S.settings.orient = e.target.value; saveSettings(); ORIENT.apply(); });
-  $('setWideLay').addEventListener('change', (e) => { S.settings.wideLay = e.target.value; saveSettings(); ORIENT.apply(); });
+  $('setOrient').addEventListener('change', (e) => { S.settings.orient = e.target.value; saveSettings(); ORIENT.apply(); LAY.renderSettings(); });
+  $('setWideLay').addEventListener('change', (e) => { S.settings.wideLay = e.target.value; saveSettings(); ORIENT.apply(); LAY.renderSettings(); });
   $('keyReset').addEventListener('click', () => { S.settings.keys = { ...DEF_KEYS }; saveSettings(); renderKeys(); toast('Tasti predefiniti ripristinati'); });
   renderKeys();
   $('devBtn').addEventListener('click', () => DEV.open());

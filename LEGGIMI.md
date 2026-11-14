@@ -1,4 +1,4 @@
-# GPverse OnAir V3.4.0 — Come si usa
+# GPverse OnAir V3.5.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -57,7 +57,7 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 
 **Green screen virtuale (senza telo):** nel riquadro VIDEO premi «🎬 Registra la scena vuota» ed esci dall'inquadratura entro 5 secondi (porta via anche la sedia, se vuoi che sparisca). Quando rientri si vede solo ciò che è nuovo: tu, un ospite, un oggetto. Regola «Sensibilità» se sparisce un pezzo di te (abbassala) o resta qualcosa della stanza (alzala). Funziona meglio con luce costante, webcam ferma e vestiti di colore diverso dal muro. In «Sfondo, logo e Iscriviti» scegli cosa mettere al posto della stanza (nero, sfocato, immagine o video) e lascia spuntato «Anche dietro di te».
 
-**Vista orizzontale:** su un monitor 16:9 OnAir dispone tutto affiancato, senza scorrere, sia in registrazione sia nel montaggio. In Impostazioni → Vista scegli automatica, orizzontale o verticale e dove mettere il video. In orizzontale i comandi video si aprono con «⚙ Regola» e il mixer è «a barre»: il ⚙ di ogni riga apre gain, EQ e (sulla voce) ingresso del microfono.
+**Vista orizzontale:** su un monitor 16:9 OnAir dispone tutto affiancato, senza scorrere, sia in registrazione sia nel montaggio. In Impostazioni → Vista scegli automatica, orizzontale o verticale e dove mettere il video. In orizzontale i comandi video si aprono con «⚙ Regola» e il mixer è «a barre»: il ⚙ di ogni riga apre gain, EQ e (sulla voce) ingresso del microfono. In Impostazioni → Disposizione, con lo schermo in orizzontale, scegli per ogni pannello la colonna (sinistra, centro, destra o in basso), l'ordine e la larghezza delle colonne; ogni set ricorda separatamente la disposizione orizzontale e quella verticale.
 
 **Stesse impostazioni su più PC:** Impostazioni → Sincronizzazione. Una volta sola: crea su GitHub un repository **privato** (es. `onair-sync`) e un token «fine-grained» con accesso solo a quel repository e permesso «Contents: Read and write». Inserisci repository e token su ogni dispositivo, scegli cosa sincronizzare, poi «⬆ Invia» dal PC dove hai preparato la puntata e «⬇ Ricevi» sull'altro (all'avvio OnAir ti avvisa da solo se c'è qualcosa di più recente).
 

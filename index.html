@@ -171,12 +171,15 @@ button:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
 .exl,.exr{display:flex;flex-direction:column;gap:10px;min-width:0}
 /* ---------- Vista orizzontale: tutto in uno schermo ---------- */
 body.wide .wrap{max-width:none;gap:10px}
-body.wide #panels{display:grid;gap:12px;align-items:stretch;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,.95fr);grid-template-rows:auto auto minmax(0,1fr) minmax(0,1fr) auto;grid-template-areas:"transport prompter intro" "transport prompter bg" "video prompter bg" "video prompter cap" "mixer mixer mixer"}
-body.wide[data-wl=left] #panels{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.95fr);grid-template-areas:"prompter transport intro" "prompter transport bg" "prompter video bg" "prompter video cap" "mixer mixer mixer"}
-body.wide[data-wl=right] #panels{grid-template-columns:minmax(0,1fr) minmax(0,.95fr) minmax(0,1.35fr);grid-template-areas:"transport intro prompter" "transport bg prompter" "video bg prompter" "video cap prompter" "mixer mixer mixer"}
-body.wide #panels>.pnl{width:auto!important;min-height:0;overflow:auto;order:0!important}
-body.wide [data-panel=transport]{grid-area:transport} body.wide [data-panel=prompter]{grid-area:prompter} body.wide [data-panel=video]{grid-area:video}
-body.wide [data-panel=intro]{grid-area:intro} body.wide [data-panel=bg]{grid-area:bg} body.wide [data-panel=cap]{grid-area:cap} body.wide [data-panel=mixer]{grid-area:mixer}
+body.wide #panels{display:grid;gap:12px;align-items:stretch;grid-template-rows:minmax(0,1fr) auto}
+.wcol{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.wbot{grid-column:1/-1;display:flex;flex-direction:column;gap:12px;min-width:0}
+body.wide.short .wcol,body.wide.short .wbot{gap:8px}
+body.wide #panels .pnl{width:auto!important;min-height:0;overflow:auto;order:0!important}
+body.wide .wcol>.pnl{flex:1 1 0}
+body.wide .wcol>[data-panel=transport],body.wide .wcol>[data-panel=intro],body.wide .wcol>[data-panel=mixer]{flex:none}
+.wcol .strips.bars{grid-template-columns:minmax(0,1fr)}
+.wcol .strips.bars .strip{grid-column:auto!important;grid-row:auto!important}
 body.wide .transport{grid-template-columns:1fr;padding:12px;gap:10px}
 body.wide .tc{font-size:clamp(28px,2.6vw,44px);padding:8px 12px}
 body.wide .tbtns button{min-height:46px;flex:1 1 120px;font-size:12px}
@@ -189,7 +192,7 @@ body.wide .card .note{display:none}
 body.wide .card .list{max-height:none;flex:1 1 auto;min-height:36px}
 body.wide #cardIntro .fname{padding:7px 10px}
 body.wide .vcard{padding:12px}
-body.wide #panels>.vcard{display:flex;flex-direction:column;overflow:hidden;position:relative}
+body.wide #panels .vcard{display:flex;flex-direction:column;overflow:hidden;position:relative}
 body.wide .vcard>.vbox{flex:none}
 body.wide .vcard>.vctl{display:none}
 body.wide .vcard.adj>.vctl{display:flex;position:absolute;left:8px;right:8px;top:48px;bottom:8px;z-index:15;overflow:auto;flex-direction:column;gap:8px;padding:10px 12px;background:rgba(8,12,22,.96);border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
@@ -455,7 +458,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.4.0</span>
+    <span class="ver" id="bootVer">V3.5.0</span>
   </div>
 </div>
 
@@ -463,7 +466,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.4.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.5.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -613,7 +616,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.4.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.5.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -761,14 +764,16 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <h3 style="font-size:13px">VISTA</h3>
     <div class="form">
       <label for="setOrient">Orientamento</label><select id="setOrient"><option value="auto">Automatico (in base allo schermo)</option><option value="wide">Orizzontale: tutto in uno schermo (monitor 16:9)</option><option value="tall">Verticale: pannelli uno sotto l'altro (tablet, telefono)</option></select>
-      <label for="setWideLay">Teleprompter nella vista orizzontale</label><select id="setWideLay"><option value="center">Al centro (webcam sopra il centro del monitor)</option><option value="left">A sinistra</option><option value="right">A destra</option></select>
+      <label for="setWideLay">Teleprompter nella vista orizzontale (disposizione di base)</label><select id="setWideLay"><option value="center">Al centro (webcam sopra il centro del monitor)</option><option value="left">A sinistra</option><option value="right">A destra</option></select>
     </div>
     <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (comodo su tablet)</option></select></div>
     <div class="form"><label for="setMixStyleWide">Stile del mixer in vista orizzontale</label><select id="setMixStyleWide"><option value="bars">A barre (una riga per fonte, occupa poco)</option><option value="console">Console (fader verticali)</option><option value="compact">Compatto</option></select></div>
     <h3 style="font-size:13px">DISPOSIZIONE DEI PANNELLI</h3>
     <p class="note" style="margin:0">Scegli un set pronto o creane uno tuo: ordine (▲▼), larghezza e visibilità di ogni pannello. Metti il teleprompter dove guardi, cioè sotto la webcam.</p>
-    <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layDel" class="danger">Elimina set</button></div>
+    <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layUpd" title="Salva le modifiche in questo set personale">Salva modifiche</button><button id="layDel" class="danger">Elimina set</button></div>
+    <div class="note" id="layMode"></div>
     <div class="laylist" id="layList"></div>
+    <div class="row" id="layCols" hidden></div>
     <div class="row"><input id="layName" placeholder="Nome del nuovo set" aria-label="Nome del nuovo set" style="flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px"><button id="laySave" class="main-act">Salva come set personale</button></div>
     <h3 style="font-size:13px">SCORCIATOIE DA TASTIERA</h3>
     <p class="note" style="margin:0">Clicca il tasto accanto a un'azione e premi quello nuovo. Se è già usato, i due tasti si scambiano. I tasti 1–9 restano ai capitoli.</p>
