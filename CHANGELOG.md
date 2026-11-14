@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.6.0 — 14/11/2026
+- Modalità «Persone»: scontorno delle persone con MediaPipe Selfie Segmentation (in locale, file in lib/mp, licenza Apache-2.0). Niente scena vuota da registrare; robusta a luce e webcam urtata. Richiede WebGL.
+- Modalità «Con la scena vuota»: avviso se la webcam si è mossa.
+- Corretto: la disposizione rapida in orizzontale ora vale anche per i set personali.
+
 ## V3.5.1 — 14/11/2026
 - Corretto: entrando nell'inquadratura ricompariva tutta la stanza (la webcam cambia da sola esposizione e bilanciamento del bianco). Ora il cambio di luce viene misurato e compensato.
 - Confronto su immagine sfocata e basato sul colore (meno sensibile a rumore, messa a fuoco, tremolii e ombre leggere); pulizia dei puntini isolati.

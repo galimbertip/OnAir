@@ -458,7 +458,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.5.1</span>
+    <span class="ver" id="bootVer">V3.6.0</span>
   </div>
 </div>
 
@@ -466,7 +466,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.5.1</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.6.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -543,12 +543,13 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="knobs">
       <label for="vTol">Tolleranza</label><input type="range" id="vTol" min="0.02" max="0.3" step="0.005"><output id="vTolO"></output>
     </div>
+    <div class="form"><label for="vVmode">Togli lo sfondo senza telo</label><select id="vVmode"><option value="scene">Con la scena vuota (toglie la stanza, tiene anche gli oggetti nuovi)</option><option value="ai">Persone (riconosce le persone, niente da registrare)</option></select></div>
     <div class="row">
       <button id="vScene" title="Esci dall'inquadratura: OnAir registra la stanza vuota e poi mostra solo ciò che è nuovo (tu, un ospite, un oggetto)">🎬 Registra la scena vuota</button>
       <button class="switch" id="vVbg" aria-pressed="false" title="Toglie tutto ciò che c'era nella scena vuota">Green screen virtuale</button>
       <button class="switch" id="vDbg" aria-pressed="false" title="Mostra in bianco ciò che resta e in rosso ciò che viene tolto, per regolare la pulizia">👁 Vedi cosa resta</button>
     </div>
-    <div class="knobs">
+    <div class="knobs" id="vVtolRow">
       <label for="vVtol" title="Più alto: toglie di più (anche ombre e piccoli cambi di luce). Più basso: tiene di più di te">Pulizia</label><input type="range" id="vVtol" min="0.04" max="0.45" step="0.005"><output id="vVtolO"></output>
     </div>
     <div class="note" id="vVbgNote">Senza telo: registra la stanza vuota, poi rientra. Tieni la luce costante e la webcam ferma.</div>
@@ -617,7 +618,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.5.1</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.6.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -765,7 +766,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <h3 style="font-size:13px">VISTA</h3>
     <div class="form">
       <label for="setOrient">Orientamento</label><select id="setOrient"><option value="auto">Automatico (in base allo schermo)</option><option value="wide">Orizzontale: tutto in uno schermo (monitor 16:9)</option><option value="tall">Verticale: pannelli uno sotto l'altro (tablet, telefono)</option></select>
-      <label for="setWideLay">Teleprompter nella vista orizzontale (disposizione di base)</label><select id="setWideLay"><option value="center">Al centro (webcam sopra il centro del monitor)</option><option value="left">A sinistra</option><option value="right">A destra</option></select>
+      <label for="setWideLay">Disposizione rapida in orizzontale (vale per il set attivo)</label><select id="setWideLay"><option value="center">Teleprompter al centro (webcam sopra il centro del monitor)</option><option value="left">Teleprompter a sinistra</option><option value="right">Teleprompter a destra</option></select>
     </div>
     <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (comodo su tablet)</option></select></div>
     <div class="form"><label for="setMixStyleWide">Stile del mixer in vista orizzontale</label><select id="setMixStyleWide"><option value="bars">A barre (una riga per fonte, occupa poco)</option><option value="console">Console (fader verticali)</option><option value="compact">Compatto</option></select></div>

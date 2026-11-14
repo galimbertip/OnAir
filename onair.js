@@ -3,9 +3,15 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.5.1' };
+const APP = { name: 'GPverse OnAir', version: '3.6.0' };
 
 const CHANGELOG = [
+  { v: '3.6.0', date: '14/11/2026', title: 'Modalità Persone (scontorno con intelligenza artificiale)', items: [
+    'Nuova modalità «Persone» per togliere lo sfondo senza telo: un modello di riconoscimento delle persone (MediaPipe, gira nel browser, niente esce dal PC) scontorna te e gli ospiti. Non serve registrare la scena vuota e non teme luce che cambia né webcam urtata.',
+    'La modalità «Con la scena vuota» resta per chi vuole mostrare anche oggetti nuovi; ora avvisa se la webcam si è mossa.',
+    'Corretto: «Disposizione rapida» (teleprompter a sinistra, al centro, a destra) non aveva effetto sui set personali. Ora vale per il set attivo.',
+    'La modalità Persone richiede l\'accelerazione grafica (WebGL) attiva nel browser.'
+  ] },
   { v: '3.5.1', date: '14/11/2026', title: 'Green screen virtuale più robusto', items: [
     'Corretto: entrando nell\'inquadratura ricompariva tutta la stanza, perché la webcam cambia da sola esposizione e bilanciamento del bianco. Ora OnAir misura il cambio di luce e lo compensa.',
     'Confronto su immagine leggermente sfocata e basato sul colore: non scattano più rumore, messa a fuoco e piccoli tremolii; le ombre leggere contano meno.',
@@ -243,7 +249,7 @@ const S = {
   mix: normMix(null),
   defaults: normMix(null),
   mutes: { voice: false, intro: false, bg: false, cap: false },
-  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.15 } },
+  settings: { orient: 'auto', wideLay: 'center', mixStyle: 'console', mixStyleWide: 'bars', channel: '', ov: { bg: 'none', behind: true, logoOn: false, logoPos: 'tr', logoSize: 0.14, logoOp: 0.9 }, plat: { sp: { fmt: 'mp3-128', lufs: '-16' }, yt: { lufs: '-14', abr: '160000', ch: '1', chName: 'file', intro: 'Introduzione' } }, retakeSec: 5, preroll: 3, ns: false, micId: '', outId: '', camId: '', micGain: 0, keys: null, video: { on: true, thr: 0.16, gl: 0.35, col: '#ffd400', mirror: false, res: 720, fx: true, mask: null, zoom: false, key: false, kc: '#33b34d', tol: 0.09, vbg: false, vtol: 0.15, vmode: 'scene' } },
   names: new Map()
 };
 async function saveDeck() { await DB.put('state', 'deck', { deck: S.deck, mix: S.mix, defaults: S.defaults, mutes: S.mutes }); SYNC.changed(); }
@@ -1089,7 +1095,7 @@ const MFRAG = `
 precision mediump float;
 varying vec2 v_uv;
 uniform sampler2D u_tex; uniform sampler2D u_bgt; uniform vec2 u_px;
-uniform float u_key; uniform float u_kmode; uniform float u_tol; uniform vec2 u_kc; uniform vec3 u_krgb; uniform float u_vbg; uniform float u_vtol; uniform vec3 u_gain;
+uniform float u_key; uniform float u_kmode; uniform float u_tol; uniform vec2 u_kc; uniform vec3 u_krgb; uniform float u_vbg; uniform float u_vtol; uniform vec3 u_gain; uniform sampler2D u_seg; uniform float u_segon;
 float vdiff(vec3 c, vec3 b){
   float Lc = dot(c, vec3(0.299,0.587,0.114)), Lb = dot(b, vec3(0.299,0.587,0.114));
   vec3 nc = c / (c.r + c.g + c.b + 0.012), nb = b / (b.r + b.g + b.b + 0.012);
@@ -1114,6 +1120,7 @@ void main(){
     vec2 e = step(vec2(0.004), v_uv) * step(v_uv, vec2(0.996)); acc *= e.x * e.y;
     a *= smoothstep(u_vtol, u_vtol + 0.07, acc);
   }
+  if (u_segon > 0.5) a *= smoothstep(0.35, 0.65, texture2D(u_seg, v_uv).r);
   gl_FragColor = vec4(a, a, a, 1.0);
 }`;
 const VERT = `attribute vec2 p; varying vec2 v_uv; void main(){ v_uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
@@ -1126,8 +1133,40 @@ function frameGeom() {
     const cx = (m[0] + m[2]) / 2, cy = (m[1] + m[3]) / 2, k = Math.min(1 / (m[2] - m[0]), 1 / (m[3] - m[1]));
     view = [cx - 0.5 / k, cy - 0.5 / k, cx + 0.5 / k, cy + 0.5 / k];
   }
-  return { mask: m, view, key: !!vs.key && ed !== 'pick', vbg: !!vs.vbg && !!CAM.bgCanvas && ed !== 'pick' && ed !== 'scene' };
+  const ai = vs.vmode === 'ai', on = !!vs.vbg && ed !== 'pick' && ed !== 'scene';
+  return { mask: m, view, key: !!vs.key && ed !== 'pick', vbg: on && !ai && !!CAM.bgCanvas, seg: on && ai && SEG.ready };
 }
+/* Scontorno delle persone con un modello di intelligenza artificiale (MediaPipe Selfie Segmentation, in locale nel browser) */
+const SEG = {
+  ready: false, busy: false, loading: null, stamp: 0, err: null,
+  load() {
+    if (this.loading) return this.loading;
+    this.loading = (async () => {
+      if (!window.SelfieSegmentation) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'lib/mp/selfie_segmentation.js'; sc.onload = res; sc.onerror = () => rej(new Error('file del modello non trovato')); document.head.append(sc); });
+      const m = new window.SelfieSegmentation({ locateFile: (f) => 'lib/mp/' + f });
+      m.setOptions({ modelSelection: 1, selfieMode: false });
+      m.onResults((r) => this.take(r.segmentationMask));
+      await m.initialize();
+      this.m = m; this.canvas = document.createElement('canvas'); this.canvas.width = 256; this.canvas.height = 144; this.g = this.canvas.getContext('2d', { willReadFrequently: true });
+      this.ready = true; this.err = null;
+    })().catch((e) => { this.loading = null; this.err = e; throw e; });
+    return this.loading;
+  },
+  take(mask) {
+    if (!mask) return;
+    const g = this.g; g.clearRect(0, 0, 256, 144); g.drawImage(mask, 0, 0, 256, 144);
+    const im = g.getImageData(0, 0, 256, 144), d = im.data; let useA = false;
+    for (let j = 3; j < d.length; j += 4 * 37) if (d[j] < 250) { useA = true; break; }
+    const P = this.prev || (this.prev = new Float32Array(256 * 144));
+    for (let j = 0, i = 0; j < d.length; j += 4, i++) { const v = (useA ? d[j + 3] : d[j]) * 0.75 + P[i] * 0.25; P[i] = v; d[j] = d[j + 1] = d[j + 2] = v; d[j + 3] = 255; }
+    g.putImageData(im, 0, 0); this.stamp++; CAM.segUpload();
+  },
+  tick(video) {
+    if (!this.ready || this.busy || !video.videoWidth) return;
+    this.busy = true; this.m.send({ image: video }).catch((e) => console.warn(e)).finally(() => { this.busy = false; });
+  }
+};
+
 const hexRgb = (c) => [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255];
 const isNeutral = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b) < 0.16;
 const cbcrOf = ([r, g, b]) => [-0.1687 * r - 0.3313 * g + 0.5 * b, 0.5 * r - 0.4187 * g - 0.0813 * b];
@@ -1168,6 +1207,13 @@ const C2D = {
         A[i] = a;
       }
     }
+    if (fg.seg && SEG.canvas) {
+      const sw = this.sw, sh = this.sh;
+      if (!this.segc) { this.segc = document.createElement('canvas'); this.segc.width = sw; this.segc.height = sh; this.segg = this.segc.getContext('2d', { willReadFrequently: true }); }
+      const sk = SEG.stamp + '|' + fg.view.join(',') + '|' + vs.mirror;
+      if (this.segKey !== sk) { this.drawView(this.segg, SEG.canvas, sw, sh, fg.view, vs.mirror); this.segData = this.segg.getImageData(0, 0, sw, sh).data; this.segKey = sk; }
+      const Sd = this.segData; for (let i = 0, j = 0; i < n; i++, j += 4) { const v = Sd[j] / 255; A[i] *= v <= 0.35 ? 0 : v >= 0.65 ? 1 : (v - 0.35) / 0.3; }
+    }
     if (fg.vbg) {
       const sw = this.sw, sh = this.sh, key = fg.view.join(',') + '|' + vs.mirror + '|' + CAM.bgStamp;
       if (this.bgKey !== key) { const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g2 = c.getContext('2d', { willReadFrequently: true }); this.drawView(g2, CAM.bgCanvas, sw, sh, fg.view, vs.mirror); this.bgData = g2.getImageData(0, 0, sw, sh).data; this.bgKey = key; }
@@ -1196,7 +1242,7 @@ const C2D = {
   },
   render(t, video, has, fresh, vs) {
     const g = this.g, W = this.cv.width, H = this.cv.height, sw = this.sw, sh = this.sh;
-    const fg = frameGeom(), keyed = fg.key || fg.vbg;
+    const fg = frameGeom(), keyed = fg.key || fg.vbg || fg.seg;
     if (CAM.dbg && keyed && has) {
       this.drawView(this.sg, video, sw, sh, fg.view, vs.mirror); const A = this.alphaMask(this.sg.getImageData(0, 0, sw, sh).data, fg, vs);
       const o = this.img.data; for (let i = 0, k = 0; i < A.length; i++, k += 4) { o[k] = 128 + 127 * A[i]; o[k + 1] = 255 * A[i]; o[k + 2] = 38 + 217 * A[i]; o[k + 3] = 255; }
@@ -1276,11 +1322,11 @@ const CAM = {
     gl.uniform1i(this.u.u_tex, 0); gl.uniform1i(this.u.u_mtex, 1);
     // Secondo passaggio: maschera "cosa resta" (green screen e scena vuota) a bassa risoluzione, poi letta sfumata
     const mp = gl.createProgram(); gl.attachShader(mp, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(mp, sh(gl.FRAGMENT_SHADER, MFRAG)); gl.linkProgram(mp); this.mprog = mp; this.mu = {};
-    for (const n of ['u_tex', 'u_bgt', 'u_px', 'u_key', 'u_kmode', 'u_tol', 'u_kc', 'u_krgb', 'u_vbg', 'u_vtol', 'u_gain']) this.mu[n] = gl.getUniformLocation(mp, n);
-    gl.useProgram(mp); gl.uniform1i(this.mu.u_tex, 0); gl.uniform1i(this.mu.u_bgt, 2); gl.useProgram(p);
+    for (const n of ['u_tex', 'u_bgt', 'u_px', 'u_key', 'u_kmode', 'u_tol', 'u_kc', 'u_krgb', 'u_vbg', 'u_vtol', 'u_gain', 'u_seg', 'u_segon']) this.mu[n] = gl.getUniformLocation(mp, n);
+    gl.useProgram(mp); gl.uniform1i(this.mu.u_tex, 0); gl.uniform1i(this.mu.u_bgt, 2); gl.uniform1i(this.mu.u_seg, 3); gl.useProgram(p);
     const mkTex = (w, h) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); return t; };
     this.MW = 480; this.MH = 270; this.mtex = mkTex(this.MW, this.MH); this.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.mtex, 0); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    this.bgtex = mkTex(1, 1); this.ploc = loc; this.mploc = gl.getAttribLocation(mp, 'p');
+    this.bgtex = mkTex(1, 1); this.segtex = mkTex(1, 1); this.ploc = loc; this.mploc = gl.getAttribLocation(mp, 'p');
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
     this.resize();
     try { const dbg = gl.getExtension('WEBGL_debug_renderer_info'); const rn = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : ''; this.soft = /swiftshader|llvmpipe|software/i.test(rn); this.renderer = rn; } catch (e) {}
@@ -1318,6 +1364,10 @@ const CAM = {
     const out = g.createImageData(W, H); for (let i = 0, j = 0; i < acc.length; i += 3, j += 4) { out.data[j] = acc[i] / N; out.data[j + 1] = acc[i + 1] / N; out.data[j + 2] = acc[i + 2] / N; out.data[j + 3] = 255; }
     g.putImageData(out, 0, 0); this.setScene(c, Date.now());
     c.toBlob((b) => { if (b) DB.put('files', 'vbg-scene', { name: 'scena vuota', type: 'image/png', blob: b, t: this.bgStamp }); }, 'image/png');
+  },
+  segUpload() {
+    if (!this.gl || !this.segtex || !SEG.canvas) return; const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.segtex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, SEG.canvas); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
   },
   setScene(canvas, stamp) {
     this.bgCanvas = canvas; this.bgStamp = stamp; this.aspWarn = false; this.gain = [1, 1, 1]; this.gbKey = null;
@@ -1363,9 +1413,17 @@ const CAM = {
       const g = Math.pow(2, (S2[best - 1] + S2[best] + S2[best + 1]) / Math.max(1, bv));
       this.gain[k] = Math.max(0.5, Math.min(2, this.gain[k] * 0.6 + g * 0.4));
     }
+    // La webcam si è mossa? Se quasi tutta l'immagine è diversa dalla scena vuota per più di 2 secondi, avvisa
+    let big = 0; for (let j = 0; j < c.length; j += 4) if (vbgDiff(c[j], c[j + 1], c[j + 2], b[j] * this.gain[0], b[j + 1] * this.gain[1], b[j + 2] * this.gain[2]) > 0.25) big++;
+    this.bumpN = big / (c.length / 4) > 0.6 ? (this.bumpN || 0) + 1 : 0;
+    if (this.bumpN > 14 && now - (this.bumpT || 0) > 30000) { this.bumpT = now; toast('Sembra che la webcam si sia mossa: registra di nuovo la scena vuota, oppure usa la modalità «Persone»'); }
   },
   render(t) {
-    if (S.settings.video.vbg && this.bgCanvas && this.ok) {
+    const vsr = S.settings.video;
+    if (vsr.vbg && vsr.vmode === 'ai' && this.ok) {
+      if (SEG.ready) SEG.tick(this.video);
+      else if (!SEG.loading && !SEG.err) { toast('Carico il modello che riconosce le persone…'); SEG.load().then(() => { toast('Modalità Persone pronta'); if (window.syncFrameUI) syncFrameUI(); }).catch(() => { toast('Modalità Persone non disponibile: serve l\'accelerazione grafica (WebGL) attiva nel browser'); if (window.syncFrameUI) syncFrameUI(); }); }
+    } else if (vsr.vbg && this.bgCanvas && this.ok) {
       this.updGain();
       const va = this.video.videoWidth / this.video.videoHeight, ba = this.bgCanvas.width / this.bgCanvas.height;
       if (va && Math.abs(va - ba) > 0.02 && !this.aspWarn) { this.aspWarn = true; toast('La webcam ha cambiato formato da quando hai registrato la scena vuota: registrala di nuovo'); }
@@ -1386,7 +1444,7 @@ const CAM = {
       if (va > ca) sx = ca / va; else sy = va / ca;
       gl.uniform2f(this.u.u_px, 1 / this.video.videoWidth, 1 / this.video.videoHeight);
     }
-    const fg0 = frameGeom(), useMask = has && (fg0.key || fg0.vbg);
+    const fg0 = frameGeom(), useMask = has && (fg0.key || fg0.vbg || fg0.seg);
     if (useMask) {
       const rgb = hexRgb(vs.kc || '#33b34d'), kc = cbcrOf(rgb);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, null); gl.activeTexture(gl.TEXTURE0);
@@ -1395,7 +1453,8 @@ const CAM = {
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.bgtex); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tex);
       gl.uniform2f(this.mu.u_px, 1 / this.video.videoWidth, 1 / this.video.videoHeight);
       gl.uniform1f(this.mu.u_key, fg0.key ? 1 : 0); gl.uniform1f(this.mu.u_kmode, isNeutral(rgb) ? 1 : 0); gl.uniform1f(this.mu.u_tol, vs.tol ?? 0.09); gl.uniform2f(this.mu.u_kc, kc[0], kc[1]); gl.uniform3f(this.mu.u_krgb, rgb[0], rgb[1], rgb[2]);
-      gl.uniform1f(this.mu.u_vbg, fg0.vbg ? 1 : 0); gl.uniform1f(this.mu.u_vtol, vs.vtol ?? 0.15); gl.uniform3f(this.mu.u_gain, ...this.gain);
+      gl.uniform1f(this.mu.u_vbg, fg0.vbg ? 1 : 0); gl.uniform1f(this.mu.u_vtol, vs.vtol ?? 0.15); gl.uniform3f(this.mu.u_gain, ...this.gain); gl.uniform1f(this.mu.u_segon, fg0.seg ? 1 : 0);
+      gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, this.segtex); gl.activeTexture(gl.TEXTURE0);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(this.prog);
       gl.enableVertexAttribArray(this.ploc); gl.vertexAttribPointer(this.ploc, 2, gl.FLOAT, false, 0, 0);
@@ -1453,7 +1512,7 @@ const OUT = {
       const rx = r[0] * W, ry = r[1] * H, rw = Math.max(4, (r[2] - r[0]) * W), rh = Math.max(4, (r[3] - r[1]) * H);
       const ca = 16 / 9, ra = rw / rh; let sx = rx, sy = ry, sw = rw, sh = rh;
       if (ra > ca) { sw = rh * ca; sx = rx + (rw - sw) / 2; } else { sh = rw / ca; sy = ry + (rh - sh) / 2; }
-      const fg = frameGeom(), raw = (fg.vbg || fg.key) ? null : src;
+      const fg = frameGeom(), raw = (fg.vbg || fg.key || fg.seg) ? null : src;
       this.bg2.imageSmoothingEnabled = true; this.bg2.fillStyle = '#000'; this.bg2.fillRect(0, 0, 48, 27);
       if (raw) this.bg2.drawImage(raw, sx / W * raw.width, sy / H * raw.height, sw / W * raw.width, sh / H * raw.height, 0, 0, 48, 27);
       else if (fg.vbg) C2D.drawView(this.bg2, CAM.bgCanvas, 48, 27, fg.view, S.settings.video.mirror);
@@ -1470,7 +1529,7 @@ const OUT = {
   },
   render(t) {
     const g = this.g, W = this.cv.width, H = this.cv.height, src = CAM.canvas, ov = S.settings.ov, fg = frameGeom();
-    const keyed = fg.key || fg.vbg, behind = keyed && ov.behind !== false && ov.bg !== 'none' && !CAM.edit;
+    const keyed = fg.key || fg.vbg || fg.seg, behind = keyed && ov.behind !== false && ov.bg !== 'none' && !CAM.edit;
     const r = this.region(), full = CAM.edit || ov.bg === 'none' || (r[0] < 0.002 && r[1] < 0.002 && r[2] > 0.998 && r[3] > 0.998);
     // Se non c'è niente da sovrapporre si mostra direttamente la webcam elaborata (più leggero)
     const pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub;
@@ -3002,7 +3061,12 @@ function wire() {
   window.addEventListener('resize', () => { clearTimeout(ORIENT.t); ORIENT.t = setTimeout(() => { const w = ORIENT.wide; ORIENT.apply(); if (w !== ORIENT.wide) LAY.renderSettings(); }, 120); });
   $('setOrient').value = S.settings.orient || 'auto'; $('setWideLay').value = S.settings.wideLay || 'center';
   $('setOrient').addEventListener('change', (e) => { S.settings.orient = e.target.value; saveSettings(); ORIENT.apply(); LAY.renderSettings(); });
-  $('setWideLay').addEventListener('change', (e) => { S.settings.wideLay = e.target.value; saveSettings(); ORIENT.apply(); LAY.renderSettings(); });
+  $('setWideLay').addEventListener('change', (e) => {
+    // Disposizione rapida: vale anche per il set attivo (prima un set personale la ignorava)
+    S.settings.wideLay = e.target.value; const id = S.settings.layout, L = (S.settings.layouts || {})[id];
+    if (L) delete L.wide; if (LAY.cur) delete LAY.cur.wide;
+    saveSettings(); ORIENT.apply(); LAY.renderSettings();
+  });
   $('keyReset').addEventListener('click', () => { S.settings.keys = { ...DEF_KEYS }; saveSettings(); renderKeys(); toast('Tasti predefiniti ripristinati'); });
   renderKeys();
   $('devBtn').addEventListener('click', () => DEV.open());
@@ -3086,11 +3150,15 @@ function wire() {
     $('vZoom').setAttribute('aria-pressed', String(!!vs.zoom)); $('vZoom').disabled = !vs.mask;
     $('vAreaReset').disabled = !vs.mask; $('vKey').setAttribute('aria-pressed', String(!!vs.key));
     $('vKc').style.background = vs.kc || '#33b34d'; $('vTol').value = vs.tol ?? 0.09; $('vTolO').textContent = Math.round((vs.tol ?? 0.09) * 100);
-    $('vVbg').setAttribute('aria-pressed', String(!!vs.vbg && !!CAM.bgCanvas)); $('vVbg').disabled = !CAM.bgCanvas;
+    const ai = vs.vmode === 'ai'; $('vVmode').value = ai ? 'ai' : 'scene';
+    $('vVbg').setAttribute('aria-pressed', String(!!vs.vbg && (ai || !!CAM.bgCanvas))); $('vVbg').disabled = !ai && !CAM.bgCanvas;
+    $('vScene').hidden = ai; $('vVtolRow').hidden = ai;
+    $('vVbgNote').textContent = ai ? (SEG.ready ? 'Modalità Persone: si vedono solo le persone, niente da registrare. Gli oggetti vengono tolti.' : SEG.err ? 'Modalità Persone non disponibile qui: serve l\'accelerazione grafica (WebGL) attiva nel browser. In Chrome: Impostazioni → Sistema → «Usa l\'accelerazione grafica quando disponibile».' : 'Modalità Persone: al primo uso carica il modello (qualche secondo).') : ($('vVbgNote').dataset.scene || 'Senza telo: registra la stanza vuota, poi rientra. Tieni la luce costante e la webcam ferma.');
     $('vVtol').value = vs.vtol ?? 0.15; $('vVtolO').textContent = Math.round((vs.vtol ?? 0.15) * 100);
-    $('vDbg').setAttribute('aria-pressed', String(!!CAM.dbg)); $('vDbg').disabled = !(vs.key || (vs.vbg && CAM.bgCanvas));
+    $('vDbg').setAttribute('aria-pressed', String(!!CAM.dbg)); $('vDbg').disabled = !(vs.key || (vs.vbg && (ai || CAM.bgCanvas)));
     $('vScene').textContent = CAM.bgCanvas ? '🎬 Registra di nuovo la scena vuota' : '🎬 Registra la scena vuota';
-  };
+  };  window.syncFrameUI = syncFrameUI;
+
   syncFrameUI();
   const endEdit = () => { CAM.edit = null; box.classList.remove('editing'); areaBox.hidden = true; hint.hidden = true; };
   const relPos = (e) => { const r = $('vBox').getBoundingClientRect(); return [Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))]; };
@@ -3129,12 +3197,14 @@ function wire() {
   $('vKey').addEventListener('click', () => { if (isRec() || blocked()) return toast('Attiva il green screen a registrazione ferma'); vs.key = !vs.key; saveSettings(); syncFrameUI(); if (vs.key && !vs.kcPicked) toast('Per un risultato migliore premi «Scegli il verde» e clicca sul telo'); });
   $('vTol').addEventListener('input', (e) => { vs.tol = +e.target.value; saveSettings(); syncFrameUI(); });
   $('vVtol').addEventListener('input', (e) => { vs.vtol = +e.target.value; saveSettings(); syncFrameUI(); });
+  $('vVmode').addEventListener('change', (e) => { if (isRec()) { e.target.value = vs.vmode || 'scene'; return toast('Cambia modalità a registrazione ferma'); } vs.vmode = e.target.value; if (vs.vmode === 'ai') { vs.vbg = true; SEG.err = null; } saveSettings(); syncFrameUI(); });
   $('vDbg').addEventListener('click', () => { CAM.dbg = !CAM.dbg; syncFrameUI(); if (CAM.dbg) toast('Bianco = resta, rosso scuro = tolto. Muovi «Pulizia» finché la stanza è tutta rossa e tu tutto bianco'); });
   $('vVbg').addEventListener('click', async () => {
     if (isRec() || blocked()) return toast('Attiva il green screen virtuale a registrazione ferma');
-    if (!CAM.bgCanvas) return toast('Prima registra la scena vuota');
-    vs.vbg = !vs.vbg; saveSettings(); syncFrameUI();
-    if (vs.vbg) $('vVbgNote').textContent = await CAM.lockCamera(); else { CAM.unlockCamera(); $('vVbgNote').textContent = 'Green screen virtuale spento.'; }
+    if (vs.vmode !== 'ai' && !CAM.bgCanvas) return toast('Prima registra la scena vuota');
+    vs.vbg = !vs.vbg; saveSettings();
+    if (vs.vmode !== 'ai') { if (vs.vbg) $('vVbgNote').dataset.scene = await CAM.lockCamera(); else CAM.unlockCamera(); }
+    syncFrameUI();
   });
   $('vScene').addEventListener('click', async () => {
     if (isRec() || blocked()) return toast('Registra la scena vuota a registrazione ferma');
@@ -3147,7 +3217,7 @@ function wire() {
       await new Promise(r => setTimeout(r, 400));
       await CAM.captureScene((p) => { hint.textContent = 'Sto registrando la scena vuota… ' + Math.round(p * 100) + '% · resta fuori'; });
       vs.vbg = true; saveSettings(); C2D.bgKey = null;
-      $('vVbgNote').textContent = 'Scena vuota registrata (' + lock + '). Ora rientra: si vede solo ciò che è nuovo.';
+      $('vVbgNote').dataset.scene = 'Scena vuota registrata (' + lock + '). Ora rientra: si vede solo ciò che è nuovo.';
       toast('Scena vuota registrata: rientra pure');
     } catch (e) { toast('Non sono riuscito a registrare la scena: ' + e.message); }
     CAM.edit = null; hint.hidden = true; btn.disabled = false; syncFrameUI();
