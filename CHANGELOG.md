@@ -7,6 +7,10 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.6.1 — 14/11/2026
+- Disposizione: ogni modifica si salva subito, in qualsiasi ordine; partendo da un set pronto si crea una copia personale. «Duplica con un nuovo nome»; tolto «Salva modifiche».
+- «Togli lo sfondo senza telo» in cima a «⚙ Regola».
+
 ## V3.6.0 — 14/11/2026
 - Modalità «Persone»: scontorno delle persone con MediaPipe Selfie Segmentation (in locale, file in lib/mp, licenza Apache-2.0). Niente scena vuota da registrare; robusta a luce e webcam urtata. Richiede WebGL.
 - Modalità «Con la scena vuota»: avviso se la webcam si è mossa.

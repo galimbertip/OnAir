@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.6.0' };
+const APP = { name: 'GPverse OnAir', version: '3.6.1' };
 
 const CHANGELOG = [
+  { v: '3.6.1', date: '14/11/2026', title: 'Disposizione: modifiche salvate subito', items: [
+    'Ogni modifica alla disposizione (colonna, ordine, visibilità, larghezza) si salva subito, in qualsiasi ordine la fai. Se parti da un set pronto, OnAir crea da solo una tua copia (es. «Classico (mio)»).',
+    '«Duplica con un nuovo nome» al posto di «Salva come set personale»; tolto «Salva modifiche», non serve più.',
+    'In «⚙ Regola» la scelta «Togli lo sfondo senza telo» (Persone o Scena vuota) è in cima.'
+  ] },
   { v: '3.6.0', date: '14/11/2026', title: 'Modalità Persone (scontorno con intelligenza artificiale)', items: [
     'Nuova modalità «Persone» per togliere lo sfondo senza telo: un modello di riconoscimento delle persone (MediaPipe, gira nel browser, niente esce dal PC) scontorna te e gli ospiti. Non serve registrare la scena vuota e non teme luce che cambia né webcam urtata.',
     'La modalità «Con la scena vuota» resta per chi vuole mostrare anche oggetti nuovi; ora avvisa se la webcam si è mossa.',
@@ -2846,7 +2851,7 @@ const LAY = {
     sel.replaceChildren();
     for (const [id, L] of Object.entries(all)) { const o = document.createElement('option'); o.value = id; o.textContent = (LAY_PRESETS[id] ? '' : '★ ') + L.name; sel.append(o); }
     sel.value = S.settings.layout || 'classico';
-    $('layDel').disabled = $('layUpd').disabled = !!LAY_PRESETS[sel.value];
+    $('layDel').disabled = !!LAY_PRESETS[sel.value];
     this.edit = JSON.parse(JSON.stringify(all[sel.value] || all.classico));
     this.renderList();
   },
@@ -2888,8 +2893,20 @@ const LAY = {
     const tl = lab('Teleprompter più alto'); tl.style.gridColumn = '2 / 6';
     box.append(tall, tl);
   },
-  preview() { // applica subito le modifiche in prova, senza salvarle
-    const host = $('panels'), L = this.edit; this.cur = L;
+  /* Ogni modifica si salva subito: se il set attivo è uno di quelli pronti, ne crea una copia personale */
+  commit() {
+    const id = S.settings.layout, data = JSON.parse(JSON.stringify(this.edit)); S.settings.layouts = S.settings.layouts || {};
+    if (LAY_PRESETS[id] || !S.settings.layouts[id]) {
+      const nid = 'u' + Date.now().toString(36), base = (LAY_PRESETS[id] || {}).name || 'Set';
+      let name = base + ' (mio)', k = 2; const names = Object.values(S.settings.layouts).map(l => l.name); while (names.includes(name)) name = base + ' (mio ' + k++ + ')';
+      S.settings.layouts[nid] = { ...data, name }; S.settings.layout = nid; this.edit.name = name;
+      const sel = $('laySel'), o = document.createElement('option'); o.value = nid; o.textContent = '★ ' + name; sel.append(o); sel.value = nid; $('layDel').disabled = false;
+      toast('Modifiche salvate nel nuovo set «' + name + '»');
+    } else S.settings.layouts[id] = { ...data, name: S.settings.layouts[id].name };
+    this.cur = S.settings.layouts[S.settings.layout]; saveSettings();
+  },
+  preview() { // applica e salva subito le modifiche
+    const host = $('panels'), L = this.edit; this.commit();
     if (ORIENT.wide) { WIDE.build(L); requestAnimationFrame(() => ORIENT.fitVideo()); if (TP.view) TP.layout(); return; }
     L.order.forEach((p, i) => { const el = host.querySelector(`[data-panel="${p}"]`); if (!el) return; el.style.order = i; el.dataset.w = L.w[p] || '1'; el.hidden = L.hidden.includes(p) || (p === 'prompter' && !TP.visible); });
     $('prompter').dataset.tall = L.tall ? '1' : '0';
@@ -2902,7 +2919,6 @@ const LAY = {
       S.settings.layouts[id] = { ...JSON.parse(JSON.stringify(this.edit)), name }; $('layName').value = '';
       this.apply(id); saveSettings(); this.renderSettings(); toast('Set «' + name + '» salvato');
     });
-    $('layUpd').addEventListener('click', () => { const id = $('laySel').value; if (LAY_PRESETS[id]) return; const name = S.settings.layouts[id].name; S.settings.layouts[id] = { ...JSON.parse(JSON.stringify(this.edit)), name }; this.apply(id); saveSettings(); this.renderSettings(); toast('Set «' + name + '» aggiornato'); });
     $('layDel').addEventListener('click', () => { const id = $('laySel').value; if (LAY_PRESETS[id]) return; delete S.settings.layouts[id]; this.apply('classico'); saveSettings(); this.renderSettings(); toast('Set eliminato'); });
   }
 };

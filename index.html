@@ -458,7 +458,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.6.0</span>
+    <span class="ver" id="bootVer">V3.6.1</span>
   </div>
 </div>
 
@@ -466,7 +466,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.6.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.6.1</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -520,6 +520,16 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="vbox" id="vBox"><canvas id="vCanvas" width="1280" height="720" style="display:none"></canvas><canvas id="vOut" width="1280" height="720"></canvas><div class="varea" id="vAreaBox" hidden></div><div class="vhint" id="vHint" hidden></div><div class="vmsg" id="vMsg" hidden></div><span class="vrec" id="vRec" hidden>● REC VIDEO</span></div>
     <div class="vctl">
       <div class="vctl-h"><b>REGOLAZIONI VIDEO</b><span class="sp"></span><button id="vAdjClose" title="Chiudi e torna all'anteprima">✕ Chiudi</button></div>
+    <div class="form"><label for="vVmode">Togli lo sfondo senza telo</label><select id="vVmode"><option value="scene">Con la scena vuota (toglie la stanza, tiene anche gli oggetti nuovi)</option><option value="ai">Persone (riconosce le persone, niente da registrare)</option></select></div>
+    <div class="row">
+      <button id="vScene" title="Esci dall'inquadratura: OnAir registra la stanza vuota e poi mostra solo ciò che è nuovo (tu, un ospite, un oggetto)">🎬 Registra la scena vuota</button>
+      <button class="switch" id="vVbg" aria-pressed="false" title="Toglie tutto ciò che c'era nella scena vuota">Green screen virtuale</button>
+      <button class="switch" id="vDbg" aria-pressed="false" title="Mostra in bianco ciò che resta e in rosso ciò che viene tolto, per regolare la pulizia">👁 Vedi cosa resta</button>
+    </div>
+    <div class="knobs" id="vVtolRow">
+      <label for="vVtol" title="Più alto: toglie di più (anche ombre e piccoli cambi di luce). Più basso: tiene di più di te">Pulizia</label><input type="range" id="vVtol" min="0.04" max="0.45" step="0.005"><output id="vVtolO"></output>
+    </div>
+    <div class="note" id="vVbgNote">Senza telo: registra la stanza vuota, poi rientra. Tieni la luce costante e la webcam ferma.</div>
     <div class="knobs">
       <label for="vThr">Contorni</label><input type="range" id="vThr" min="0.02" max="0.6" step="0.01"><output id="vThrO"></output>
       <label for="vGl">Disturbo</label><input type="range" id="vGl" min="0" max="1" step="0.01"><output id="vGlO"></output>
@@ -543,16 +553,6 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="knobs">
       <label for="vTol">Tolleranza</label><input type="range" id="vTol" min="0.02" max="0.3" step="0.005"><output id="vTolO"></output>
     </div>
-    <div class="form"><label for="vVmode">Togli lo sfondo senza telo</label><select id="vVmode"><option value="scene">Con la scena vuota (toglie la stanza, tiene anche gli oggetti nuovi)</option><option value="ai">Persone (riconosce le persone, niente da registrare)</option></select></div>
-    <div class="row">
-      <button id="vScene" title="Esci dall'inquadratura: OnAir registra la stanza vuota e poi mostra solo ciò che è nuovo (tu, un ospite, un oggetto)">🎬 Registra la scena vuota</button>
-      <button class="switch" id="vVbg" aria-pressed="false" title="Toglie tutto ciò che c'era nella scena vuota">Green screen virtuale</button>
-      <button class="switch" id="vDbg" aria-pressed="false" title="Mostra in bianco ciò che resta e in rosso ciò che viene tolto, per regolare la pulizia">👁 Vedi cosa resta</button>
-    </div>
-    <div class="knobs" id="vVtolRow">
-      <label for="vVtol" title="Più alto: toglie di più (anche ombre e piccoli cambi di luce). Più basso: tiene di più di te">Pulizia</label><input type="range" id="vVtol" min="0.04" max="0.45" step="0.005"><output id="vVtolO"></output>
-    </div>
-    <div class="note" id="vVbgNote">Senza telo: registra la stanza vuota, poi rientra. Tieni la luce costante e la webcam ferma.</div>
     <details class="eq" id="ovBox"><summary>Sfondo, logo e Iscriviti</summary>
       <div class="knobs" style="grid-template-columns:auto minmax(0,1fr)">
         <label for="ovBg">Sfondo</label><select id="ovBg"><option value="none">Nero</option><option value="blur">Sfocato, come al TG</option><option value="image">Immagine</option><option value="video">Video</option></select>
@@ -618,7 +618,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.6.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.6.1</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -771,12 +771,12 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="form"><label for="setMixStyle">Stile del mixer</label><select id="setMixStyle"><option value="console">Console (fader verticali, come un mixer vero)</option><option value="compact">Compatto (comodo su tablet)</option></select></div>
     <div class="form"><label for="setMixStyleWide">Stile del mixer in vista orizzontale</label><select id="setMixStyleWide"><option value="bars">A barre (una riga per fonte, occupa poco)</option><option value="console">Console (fader verticali)</option><option value="compact">Compatto</option></select></div>
     <h3 style="font-size:13px">DISPOSIZIONE DEI PANNELLI</h3>
-    <p class="note" style="margin:0">Scegli un set pronto o creane uno tuo: ordine (▲▼), larghezza e visibilità di ogni pannello. Metti il teleprompter dove guardi, cioè sotto la webcam.</p>
-    <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layUpd" title="Salva le modifiche in questo set personale">Salva modifiche</button><button id="layDel" class="danger">Elimina set</button></div>
+    <p class="note" style="margin:0">Scegli un set e modificalo: ogni modifica si salva subito (se parti da un set pronto, OnAir ne crea una copia tua). Metti il teleprompter dove guardi, cioè sotto la webcam.</p>
+    <div class="row"><select id="laySel" aria-label="Set di pannelli" style="flex:1;min-width:0"></select><button id="layDel" class="danger">Elimina set</button></div>
     <div class="note" id="layMode"></div>
     <div class="laylist" id="layList"></div>
     <div class="row" id="layCols" hidden></div>
-    <div class="row"><input id="layName" placeholder="Nome del nuovo set" aria-label="Nome del nuovo set" style="flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px"><button id="laySave" class="main-act">Salva come set personale</button></div>
+    <div class="row"><input id="layName" placeholder="Nome del nuovo set" aria-label="Nome del nuovo set" style="flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px"><button id="laySave" class="main-act">Duplica con un nuovo nome</button></div>
     <h3 style="font-size:13px">SCORCIATOIE DA TASTIERA</h3>
     <p class="note" style="margin:0">Clicca il tasto accanto a un'azione e premi quello nuovo. Se è già usato, i due tasti si scambiano. I tasti 1–9 restano ai capitoli.</p>
     <div class="keylist" id="keyList"></div>

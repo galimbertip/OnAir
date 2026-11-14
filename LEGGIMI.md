@@ -1,4 +1,4 @@
-# GPverse OnAir V3.6.0 — Come si usa
+# GPverse OnAir V3.6.1 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
