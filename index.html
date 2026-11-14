@@ -229,6 +229,13 @@ body.wide #vAdjust{display:inline-flex}
 .strips.bars details.eq>summary::before{content:'⚙';font-size:14px}
 .strips.bars details.eq[open]>summary{border-color:var(--cc,var(--cyan));color:var(--cc,var(--cyan))}
 .strips.bars .eqpop{z-index:60;background:var(--panel);border:1px solid var(--line2);border-top:3px solid var(--cc,var(--cyan));border-radius:10px;padding:10px 12px;overflow:auto;box-shadow:0 -10px 30px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:8px}
+.eqfloat{position:fixed;z-index:60;background:var(--panel);border:1px solid var(--line2);border-top:3px solid var(--cc,var(--cyan));border-radius:10px;padding:10px 12px;box-shadow:0 10px 34px rgba(0,0,0,.65);display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 16px);overflow:visible}
+.eqfloat::after{content:'';position:absolute;left:calc(var(--ax,50%) - 7px);bottom:-8px;border:7px solid transparent;border-bottom:0;border-top-color:var(--line2)}
+.eqfloat.below::after{bottom:auto;top:-10px;border:7px solid transparent;border-top:0;border-bottom-color:var(--cc,var(--cyan))}
+.eqfloat .eqpop-h{cursor:move;user-select:none;touch-action:none}
+.eqfloat .def{margin-top:4px;width:100%;font-size:12px;padding:6px}
+.eqfloat .inmic{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;margin:0}
+.eqfloat .inmic .fl{display:inline;font-size:11px;color:var(--dim)}
 .eqpop-h{display:flex;align-items:center;justify-content:space-between;font:700 11px var(--f-display);letter-spacing:.18em;color:var(--cc,var(--cyan))}
 .eqpop-h .eqx{padding:2px 8px;min-height:0}
 .strips.bars .eqpop .inmic{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px}
@@ -461,7 +468,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V3.7.0</span>
+    <span class="ver" id="bootVer">V3.7.1</span>
   </div>
 </div>
 
@@ -469,7 +476,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V3.7.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V3.7.1</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -621,7 +628,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.7.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V3.7.1</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->

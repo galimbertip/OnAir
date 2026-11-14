@@ -7,6 +7,9 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V3.7.1 — 14/11/2026
+- Corretto: il pannello ⚙ del mixer a barre compariva in un punto sbagliato. Ora è un menu a comparsa agganciato all'ingranaggio (con freccia), trascinabile dalla testata, chiuso con ✕ o cliccando fuori.
+
 ## V3.7.0 — 14/11/2026
 **Pulizia della voce** (Impostazioni → Pulizia della voce)
 - Riduzione rumore AI con RNNoise (lib/ns, @sapphi-red/web-noise-suppressor, MIT; RNNoise BSD).

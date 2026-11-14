@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '3.7.0' };
+const APP = { name: 'GPverse OnAir', version: '3.7.1' };
 
 const CHANGELOG = [
+  { v: '3.7.1', date: '14/11/2026', title: 'Menu ⚙ del mixer a barre agganciato all\'ingranaggio', items: [
+    'Corretto: nel mixer a barre il pannello ⚙ (gain, EQ, ingresso mic) compariva in un punto sbagliato dello schermo.',
+    'Ora si apre come un menu a comparsa sopra l\'ingranaggio, con una freccia che lo indica (sotto, se in alto non c\'è spazio).',
+    'Si può spostare trascinandolo dalla testata; si chiude con ✕ o cliccando fuori.'
+  ] },
   { v: '3.7.0', date: '14/11/2026', title: 'Pulizia della voce: riduzione rumore AI e noise gate', items: [
     'Riduzione rumore AI (RNNoise, gira nel browser): toglie tastiera, clic del mouse, ventole e rumori di fondo dalla voce registrata.',
     'Noise gate: quando non parli abbassa il microfono, così nelle pause non entra niente. Soglia regolabile e spia «GATE» sulla riga della voce (verde = microfono aperto).',
@@ -2103,12 +2108,29 @@ const inmicHtml = (pre) => `<label class="fad inmic" for="${pre}-in" title="Guad
 const mixStyleNow = () => ORIENT.wide ? (S.settings.mixStyleWide || 'bars') : (S.settings.mixStyle || 'console');
 /* Mixer a barre: "Gain ed EQ" si apre in un pannello sopra la riga, fuori dal mixer */
 function placeEqPop(de) {
-  const pop = de.querySelector('.eqpop');
-  if (!de.open) { pop.style.cssText = ''; return; }
+  const pop = de._pop || (de._pop = de.querySelector('.eqpop'));
+  if (!de.open) { if (pop.parentElement !== de) de.append(pop); pop.classList.remove('eqfloat', 'below'); pop.style.cssText = ''; delete pop.dataset.moved; return; }
   document.querySelectorAll('#liveStrips details.eq[open]').forEach(o => { if (o !== de) o.open = false; });
-  const r = de.querySelector('summary').getBoundingClientRect(), w = Math.min(400, innerWidth - 24);
-  const left = Math.max(12, Math.min(innerWidth - w - 12, r.right - w));
-  Object.assign(pop.style, { position: 'fixed', left: left + 'px', width: w + 'px', bottom: (innerHeight - r.top + 8) + 'px', maxHeight: Math.max(200, r.top - 24) + 'px' });
+  // Menu a comparsa agganciato all'ingranaggio, sopra la riga (sotto se in alto non c'è spazio); si sposta trascinando la testata
+  if (pop.parentElement !== document.body) { document.body.append(pop); pop.classList.add('eqfloat'); pop.style.setProperty('--cc', getComputedStyle(de.closest('.strip')).getPropertyValue('--cc')); dragPop(pop); }
+  if (pop.dataset.moved) return;
+  const r = de.querySelector('summary').getBoundingClientRect(), w = Math.min(380, innerWidth - 24); pop.style.width = w + 'px';
+  const h = pop.offsetHeight, left = Math.max(12, Math.min(innerWidth - w - 12, r.right - w + 14));
+  const below = r.top - h - 12 < 8; pop.classList.toggle('below', below);
+  pop.style.left = left + 'px'; pop.style.top = (below ? r.bottom + 10 : Math.max(8, r.top - h - 10)) + 'px';
+  pop.style.setProperty('--ax', Math.max(14, Math.min(w - 14, r.left + r.width / 2 - left)) + 'px');
+}
+function dragPop(pop) {
+  if (pop._drag) return; pop._drag = true; const hd = pop.querySelector('.eqpop-h'); if (!hd) return;
+  hd.title = 'Trascina per spostare';
+  hd.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return; e.preventDefault(); hd.setPointerCapture(e.pointerId);
+    const r = pop.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    const mv = (ev) => { pop.dataset.moved = '1'; pop.classList.remove('below'); pop.style.setProperty('--ax', '-99px');
+      pop.style.left = Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx)) + 'px'; pop.style.top = Math.max(0, Math.min(innerHeight - 40, ev.clientY - dy)) + 'px'; };
+    const up = () => { hd.removeEventListener('pointermove', mv); hd.removeEventListener('pointerup', up); };
+    hd.addEventListener('pointermove', mv); hd.addEventListener('pointerup', up);
+  });
 }
 function buildMixer(host, mix, { onChange, meters = false, mutes = null }) {
   host.replaceChildren(); const refs = {};
@@ -3332,12 +3354,12 @@ function wire() {
 
   const STY = { console: 'console', compact: 'compatta', bars: 'a barre' };
   const nextSty = () => { const list = ORIENT.wide ? ['bars', 'console', 'compact'] : ['console', 'compact']; const cur = mixStyleNow(); return list[(list.indexOf(cur) + 1) % list.length]; };
-  const mkLive = () => { meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = '⇄ Vista ' + STY[nextSty()]; $('setMixStyle').value = S.settings.mixStyle || 'console'; $('setMixStyleWide').value = S.settings.mixStyleWide || 'bars'; };
+  const mkLive = () => { document.querySelectorAll('body > .eqfloat').forEach(e => e.remove()); meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = '⇄ Vista ' + STY[nextSty()]; $('setMixStyle').value = S.settings.mixStyle || 'console'; $('setMixStyleWide').value = S.settings.mixStyleWide || 'bars'; };
   mkLive(); ORIENT.onWide = mkLive;
   $('mixStyleBtn').addEventListener('click', () => { const n = nextSty(); if (ORIENT.wide) S.settings.mixStyleWide = n; else S.settings.mixStyle = n; saveSettings(); mkLive(); });
   $('setMixStyle').addEventListener('change', (e) => { S.settings.mixStyle = e.target.value; saveSettings(); mkLive(); });
   $('setMixStyleWide').addEventListener('change', (e) => { S.settings.mixStyleWide = e.target.value; saveSettings(); mkLive(); });
-  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#liveStrips details.eq')) document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(o => { o.open = false; }); });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#liveStrips details.eq, .eqfloat')) document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(o => { o.open = false; }); });
   addEventListener('resize', () => document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(placeEqPop));
 }
 
