@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.0.3 — 14/11/2026
+- Controllo completo con prove automatiche (≈190 verifiche: impostazioni, scorciatoie, registrazione, teleprompter, categorie, sessioni ed esportazioni, montaggio, video, green screen, viste).
+- Corretto: in Sessioni i livelli di una sessione venivano normalizzati sulle categorie attuali invece che su quelle della sessione.
+- Avviso quando il tasto di una categoria non ha niente da lanciare (vuota o lista finita).
+
 ## V4.0.2 — 14/11/2026
 - Corretto: con «Scorre quando parlo» [PAUSA] fermava il testo per sempre. Ora attende una pausa e riparte quando riprendi a parlare (P lo fa ripartire subito); a velocità fissa invariato; con «Segue le parole» ignorato.
 - Pulsanti dei segnali nell'editor del testo generati dalle categorie audio.

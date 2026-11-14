@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.0.2' };
+const APP = { name: 'GPverse OnAir', version: '4.0.3' };
 
 const CHANGELOG = [
+  { v: '4.0.3', date: '14/11/2026', title: 'Controllo completo dell\'app', items: [
+    'Verificate con prove automatiche tutte le funzioni: Impostazioni, ogni scorciatoia, registrazione con pausa, re-take e termina, teleprompter nei tre modi, categorie audio, sessioni (rinomina, esportazioni Spotify, YouTube e WAV, capitoli, trasferimento .onair, eliminazione, recupero di una registrazione interrotta), montaggio, video, green screen, vista orizzontale, verticale e telefono.',
+    'Corretto: aprendo Sessioni, i livelli di una sessione venivano adattati alle categorie di adesso invece che a quelle della sessione (eliminando una categoria, le sessioni vecchie ne avrebbero perso i livelli).',
+    'Quando premi il tasto di una categoria vuota o di una lista di stacchetti già finita, OnAir ora te lo dice invece di non fare niente.'
+  ] },
   { v: '4.0.2', date: '14/11/2026', title: '[PAUSA] con lo scorrimento a voce', items: [
     'Corretto: con «Scorre quando parlo» il segnale [PAUSA] fermava il testo per sempre (bisognava premere P). Ora il testo aspetta che tu faccia una pausa e riparte da solo quando riprendi a parlare; il pulsante Scorri diventa giallo mentre aspetta. P lo fa ripartire subito. A velocità fissa resta come prima.',
     'Con «Segue le parole che leggo» [PAUSA] non serve: il testo segue già la tua voce.',
@@ -643,7 +648,12 @@ function listPlay(id, i) {
 }
 function listStop(id) { if (blocked() || !E.voices[id]) return; stopVoice(id); afterEnd(id); renderDeck(); }
 /* Il tasto della categoria: sigla → play, loop → play/pausa, stacchetti → lancia il prossimo */
-function catAction(id) { const c = catOf(id); if (!c) return; if (c.type === 'single') singlePlay(id); else if (c.type === 'loop') loopToggle(id); else listPlay(id, E.next[id] || 0); }
+function catAction(id) {
+  const c = catOf(id); if (!c) return;
+  if (c.type === 'single') { if (!dk(id)) toast(c.name + ': nessun file caricato'); singlePlay(id); }
+  else if (c.type === 'loop') { if (!dkList(id).length) toast(c.name + ': nessun brano caricato'); loopToggle(id); }
+  else { const n = E.next[id] || 0, L = dkList(id); if (!L.length) toast(c.name + ': lista vuota'); else if (n >= L.length) toast(c.name + ': lista finita · usa ⏮ o il numero (1–9) per rilanciarne uno'); listPlay(id, n); }
+}
 function catStop(id) { const c = catOf(id); if (!c) return; if (c.type === 'single') singleStop(id); else if (c.type === 'list') listStop(id); else if (loopSt(id).status === 'playing') loopToggle(id); }
 const firstList = () => CATS().find(c => c.type === 'list');
 const firstSingle = () => CATS().find(c => c.type === 'single');
@@ -2505,7 +2515,7 @@ async function openSessions(selId) {
   if (!all.length) { const e = document.createElement('li'); e.innerHTML = '<span class="note">Ancora nessuna registrazione. Premi Spazio per iniziare la prima.</span>'; list.append(e); return; }
   for (const s of all) {
     if (R.session && s.id === R.session.id) continue;
-    s.mix = normMix(s.mix);
+    s.mix = normMix(s.mix, catsOf(s));
     const el = document.createElement('li'); if (s.id === selId) el.classList.add('sel');
     const dur = sessDur(s);
     const missing = [...new Set(s.segs.map(g => g.fileId))].filter(id => !S.names.has(id));
