@@ -7,6 +7,10 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.0.4 — 15/11/2026
+- Corretto: R, Spazio e TERMINA erano ignorati durante il riascolto dopo un re-take (l'errore restava nella puntata). Ora R riapre il re-take e torna più indietro; la musica ripresa per il riascolto si ferma e riparte dal nuovo punto.
+- Avviso durante il riascolto.
+
 ## V4.0.3 — 14/11/2026
 - Controllo completo con prove automatiche (≈190 verifiche: impostazioni, scorciatoie, registrazione, teleprompter, categorie, sessioni ed esportazioni, montaggio, video, green screen, viste).
 - Corretto: in Sessioni i livelli di una sessione venivano normalizzati sulle categorie attuali invece che su quelle della sessione.

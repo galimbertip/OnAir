@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.0.3' };
+const APP = { name: 'GPverse OnAir', version: '4.0.4' };
 
 const CHANGELOG = [
+  { v: '4.0.4', date: '15/11/2026', title: 'Re-take durante il riascolto', items: [
+    'Corretto: durante i secondi di riascolto dopo un re-take, premere di nuovo R (o Spazio, o TERMINA) non faceva niente. La registrazione ripartiva, si rileggeva il pezzo e nella puntata restava anche l\'errore. Ora R durante il riascolto riapre il re-take e torna ancora più indietro; Spazio mette in pausa; TERMINA chiude.',
+    'Durante il riascolto un avviso ricorda che R torna più indietro.',
+    'Verificato con un microfono simulato a note diverse: dopo uno o più re-take la voce registrata e quella esportata sono tagliate senza sovrapposizioni, anche con sigla, sottofondo, capitoli, video e pulizia della voce attivi.'
+  ] },
   { v: '4.0.3', date: '14/11/2026', title: 'Controllo completo dell\'app', items: [
     'Verificate con prove automatiche tutte le funzioni: Impostazioni, ogni scorciatoia, registrazione con pausa, re-take e termina, teleprompter nei tre modi, categorie audio, sessioni (rinomina, esportazioni Spotify, YouTube e WAV, capitoli, trasferimento .onair, eliminazione, recupero di una registrazione interrotta), montaggio, video, green screen, vista orizzontale, verticale e telefono.',
     'Corretto: aprendo Sessioni, i livelli di una sessione venivano adattati alle categorie di adesso invece che a quelle della sessione (eliminando una categoria, le sessioni vecchie ne avrebbero perso i livelli).',
@@ -691,6 +696,20 @@ async function recStart() {
   renderAll();
 }
 async function enterHold(mode) {
+  // durante il pre-ascolto di un re-take si può tornare ancora più indietro (prima il tasto veniva ignorato)
+  if (R.state === 'preroll') {
+    clearTimeout(R.prerollTimer); for (const x of R.preSrcs || []) try { x.stop(); } catch (e) {} R.preSrcs = [];
+    // la musica ripartita per il pre-ascolto si ferma; i suoi pezzi originali tornano «aperti» così riprendono dal nuovo punto
+    const Tq = R.Tanchor;
+    for (const ch of chsOf()) {
+      const v = E.voices[ch]; if (!v) continue; v.manual = true; try { v.src.stop(); } catch (e) {} E.voices[ch] = null;
+      const cont = v.seg; if (!cont) continue;
+      R.session.segs = R.session.segs.filter(x => x !== cont);
+      const orig = R.session.segs.find(x => x.ch === ch && x.fileId === cont.fileId && x.tEnd != null && Math.abs(x.tEnd - Tq) < 1e-3);
+      if (orig) orig.byHold = true;
+    }
+    R.state = 'rec';
+  }
   if (R.state !== 'rec') return;
   const t = now();
   R.untilFrame = Math.round(t * E.sr);
@@ -738,21 +757,23 @@ async function commitHold() {
   }
 
   // Pre-ascolto: voce e musica degli ultimi secondi, poi si riparte
+  R.preSrcs = [];
   const P = Math.min(S.settings.preroll, Tq);
   const base = now() + 0.12, end = base + P, w0 = Tq - P;
   R.Tanchor = Tq; R.ctxAnchor = end; R.fromFrame = Math.round(end * E.sr); R.untilFrame = Infinity; R.fadeIn = 0;
   R.state = 'preroll';
   TP.onResume(Tq, w0);
   if (P > 0) {
+    toast(`Riascolti gli ultimi ${Math.round(P)} s, poi si registra · ${keyLabel('retake')} per tornare ancora più indietro`);
     const pre = await readVoice(R.session, nS - Math.round(P * E.sr), nS, true);
     const b = E.ctx.createBuffer(1, pre.length, E.sr); b.copyToChannel(pre, 0);
-    const s = E.ctx.createBufferSource(); s.buffer = b; s.connect(E.bus.mon); s.start(base);
+    const s = E.ctx.createBufferSource(); s.buffer = b; s.connect(E.bus.mon); s.start(base); R.preSrcs.push(s);
     for (const sg of kept) {
       if (open.includes(sg) || sg.tEnd <= w0) continue;
       const buf = E.buffers.get(sg.fileId); if (!buf) continue;
       const a = Math.max(sg.tStart, w0);
       const src = E.ctx.createBufferSource(); src.buffer = buf; src.connect(E.bus[sg.ch]);
-      src.start(base + (a - w0), sg.off + (a - sg.tStart)); src.stop(base + (sg.tEnd - w0));
+      src.start(base + (a - w0), sg.off + (a - sg.tStart)); src.stop(base + (sg.tEnd - w0)); R.preSrcs.push(src);
     }
   }
   for (const sg of open) {
@@ -2214,9 +2235,9 @@ function renderStatus() {
   const rb = $('recBtn');
   rb.innerHTML = (R.state === 'idle' ? '● REGISTRA' : R.state === 'hold' ? '▶ RIPRENDI' : '❚❚ PAUSA') + '<span class="kbd" data-act="rec"></span>'; rb.lastChild.textContent = keyLabel('rec');
   rb.classList.toggle('paused', R.state !== 'idle');
-  rb.disabled = R.state === 'preroll';
-  $('retakeBtn').disabled = R.state !== 'rec';
-  $('stopBtn').disabled = R.state === 'idle' || R.state === 'preroll';
+  rb.disabled = false;
+  $('retakeBtn').disabled = R.state !== 'rec' && R.state !== 'preroll';
+  $('stopBtn').disabled = R.state === 'idle';
   $('tcSub').textContent = R.state === 'idle' ? 'Nessuna registrazione in corso' : `${R.session.name} · re-take: ${R.session.retakes}`;
 }
 function li(cls, num, text, onClick, ops) {
@@ -3428,7 +3449,7 @@ function onKeyMain(e) {
   const tk = performance.now(); if (onKeyMain.last && onKeyMain.last.k === nk && tk - onKeyMain.last.t < 80) return; onKeyMain.last = { k: nk, t: tk };
   if (act === 'help') { HELP.toggle(); return; }
   if (!$('helpModal').hidden) $('helpModal').hidden = true;
-  if (act === 'rec') { if (R.state === 'idle') recStart(); else if (R.state === 'rec') enterHold('pause'); }
+  if (act === 'rec') { if (R.state === 'idle') recStart(); else if (R.state === 'rec' || R.state === 'preroll') enterHold('pause'); }
   else if (act === 'retake') enterHold('retake');
   else if (catOf(act)) catAction(act);
   else if (act === 'tpRun') TP.toggle();
@@ -3511,10 +3532,10 @@ function wire() {
   DECKUI.build();
   CATUI.render(); $('catAdd').addEventListener('click', () => CATUI.add());
   $('catReset').addEventListener('click', () => { if (R.state !== 'idle') return toast('A registrazione ferma'); if (!confirm('Tornare alle tre categorie di base (Sigla, Sottofondo, Capitoli)? Le altre categorie e i loro brani escono dal deck.')) return; for (const ch of Object.keys(E.voices)) if (E.voices[ch]) stopVoice(ch); S.settings.cats = DEF_CATS(); E.loops = {}; E.next = {}; CATUI.apply(); });
-  $('recBtn').addEventListener('click', () => { if (R.state === 'idle') recStart(); else if (R.state === 'rec') enterHold('pause'); else if (R.state === 'hold') commitHold(); });
+  $('recBtn').addEventListener('click', () => { if (R.state === 'idle') recStart(); else if (R.state === 'rec' || R.state === 'preroll') enterHold('pause'); else if (R.state === 'hold') commitHold(); });
   $('retakeBtn').addEventListener('click', () => enterHold('retake'));
   // TERMINA mette subito in pausa (il contatore si ferma) e chiede conferma nel pannello
-  $('stopBtn').addEventListener('click', () => { if (R.state === 'rec') enterHold('end'); else if (R.state === 'hold') { R.holdMode = 'end'; openHold(); } });
+  $('stopBtn').addEventListener('click', () => { if (R.state === 'rec' || R.state === 'preroll') enterHold('end'); else if (R.state === 'hold') { R.holdMode = 'end'; openHold(); } });
   $('holdMinus').addEventListener('click', () => setHoldN(R.holdN - 1));
   $('holdPlus').addEventListener('click', () => setHoldN(R.holdN + 1));
   $('holdRange').addEventListener('input', (e) => setHoldN(+e.target.value));
