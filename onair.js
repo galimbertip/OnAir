@@ -3,9 +3,18 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.0.4' };
+const APP = { name: 'GPverse OnAir', version: '4.1.0' };
 
 const CHANGELOG = [
+  { v: '4.1.0', date: '15/11/2026', title: 'App più leggera', items: [
+    'Il video in anteprima si ridisegna solo quando la webcam manda un fotogramma nuovo (o cambi un\'impostazione), non più 60 volte al secondo.',
+    'Indicatori del mixer aggiornati 30 volte al secondo e solo se il valore cambia; contatore, barre di avanzamento e misura del volume voce senza lavoro inutile.',
+    'Effetto contorni senza accelerazione grafica più veloce; righe di scansione precalcolate; senza «disturbo» l\'immagine si disegna in un colpo solo.',
+    'Il video registrato riceve solo fotogrammi nuovi; la modalità «Persone» analizza al massimo 15 fotogrammi al secondo.',
+    'Nuova «Modalità leggera» (Impostazioni → Prestazioni): fuori registrazione l\'anteprima va a 15 fotogrammi al secondo e il mixer si aggiorna meno spesso.',
+    'In Impostazioni → Prestazioni vedi quanto lavoro sta facendo l\'app sul tuo PC.',
+    'Misure su questo computer di prova: studio fermo da 67% a 46% del processore principale (23% in modalità leggera, 19% con video a 540p); senza effetto da 51% a 24%; registrazione da 92% a 72% (53% con video a 540p).'
+  ] },
   { v: '4.0.4', date: '15/11/2026', title: 'Re-take durante il riascolto', items: [
     'Corretto: durante i secondi di riascolto dopo un re-take, premere di nuovo R (o Spazio, o TERMINA) non faceva niente. La registrazione ripartiva, si rileggeva il pezzo e nella puntata restava anche l\'errore. Ora R durante il riascolto riapre il re-take e torna ancora più indietro; Spazio mette in pausa; TERMINA chiude.',
     'Durante il riascolto un avviso ricorda che R torna più indietro.',
@@ -1365,6 +1374,7 @@ const SEG = {
   },
   tick(video) {
     if (!this.ready || this.busy || !video.videoWidth) return;
+    const tn = performance.now(); if (tn - (this.lastT || 0) < 66) return; this.lastT = tn;
     this.busy = true; this.m.send({ image: video }).catch((e) => console.warn(e)).finally(() => { this.busy = false; });
   }
 };
@@ -1467,16 +1477,18 @@ const C2D = {
       const d = this.sg.getImageData(0, 0, sw, sh).data, L = this.lum, o = this.img.data;
       const A = keyed ? this.alphaMask(d, fg, vs) : null;
       for (let i = 0, j = 0; i < L.length; i++, j += 4) L[i] = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) / 255 * (A ? A[i] : 1);
-      const lo = vs.thr * 0.85, hi = lo + 0.14;
-      for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
-        const k = (yy * sw + xx) * 4, i = yy * sw + xx;
-        if (xx === 0 || yy === 0 || xx === sw - 1 || yy === sh - 1) { o[k] = o[k + 1] = o[k + 2] = 0; o[k + 3] = A ? A[i] * 255 : 255; continue; }
-        const tl = L[i - sw - 1], tp = L[i - sw], tr = L[i - sw + 1], l = L[i - 1], r = L[i + 1], bl = L[i + sw - 1], bt = L[i + sw], br = L[i + sw + 1];
-        const gx = -tl - 2 * l - bl + tr + 2 * r + br, gy = -bl - 2 * bt - br + tl + 2 * tp + tr;
-        let m = (Math.sqrt(gx * gx + gy * gy) - lo) / (hi - lo); m = m < 0 ? 0 : m > 1 ? 1 : m;
-        const a = A ? Math.max(A[i], m) : 1;
-        o[k] = a > 0 ? cr * m / a : 0; o[k + 1] = a > 0 ? cg * m / a : 0; o[k + 2] = a > 0 ? cb * m / a : 0; o[k + 3] = a * 255;
-      }
+      const lo = vs.thr * 0.85, inv = 1 / 0.14, lo2 = lo * lo;
+      // bordi neri una volta sola, poi solo l'interno (senza controlli per pixel)
+      for (let xx = 0; xx < sw; xx++) for (const yy of [0, sh - 1]) { const i = yy * sw + xx, k = i * 4; o[k] = o[k + 1] = o[k + 2] = 0; o[k + 3] = A ? A[i] * 255 : 255; }
+      for (let yy = 1; yy < sh - 1; yy++) { for (const xx of [0, sw - 1]) { const i = yy * sw + xx, k = i * 4; o[k] = o[k + 1] = o[k + 2] = 0; o[k + 3] = A ? A[i] * 255 : 255; }
+        for (let xx = 1, i = yy * sw + 1, k = i * 4; xx < sw - 1; xx++, i++, k += 4) {
+          const tl = L[i - sw - 1], tp = L[i - sw], tr = L[i - sw + 1], l = L[i - 1], r = L[i + 1], bl = L[i + sw - 1], bt = L[i + sw], br = L[i + sw + 1];
+          const gx = -tl - 2 * l - bl + tr + 2 * r + br, gy = -bl - 2 * bt - br + tl + 2 * tp + tr, g2 = gx * gx + gy * gy;
+          let m = 0; if (g2 > lo2) { m = (Math.sqrt(g2) - lo) * inv; if (m > 1) m = 1; }
+          if (!A) { o[k] = cr * m; o[k + 1] = cg * m; o[k + 2] = cb * m; o[k + 3] = 255; continue; }
+          const a = A[i] > m ? A[i] : m;
+          o[k] = a > 0 ? cr * m / a : 0; o[k + 1] = a > 0 ? cg * m / a : 0; o[k + 2] = a > 0 ? cb * m / a : 0; o[k + 3] = a * 255;
+        } }
       this.eg.putImageData(this.img, 0, 0);
       this.maskOut(this.eg, sw, sh, fg.view, fg.mask);
     } else if (!has) {
@@ -1485,7 +1497,7 @@ const C2D = {
     }
     g.clearRect(0, 0, W, H);
     g.imageSmoothingEnabled = true;
-    const bands = 36, bh = H / bands, sbh = sh / bands, jolt = hash2(tt, 37) > 0.965 ? gl : 0;
+    const bands = gl > 0.01 ? 36 : 1, bh = H / bands, sbh = sh / bands, jolt = gl > 0.01 && hash2(tt, 37) > 0.965 ? gl : 0;
     for (let b = 0; b < bands; b++) {
       const rb = hash2(b, tt); let shift = rb > 1 - 0.18 * gl ? (hash2(tt, b + 99) - 0.5) * 0.09 * gl * W : 0;
       shift += jolt * (hash2(b * 3, tt) - 0.5) * 0.05 * W;
@@ -1493,7 +1505,8 @@ const C2D = {
     }
     g.save(); g.globalCompositeOperation = 'source-atop';
     if (gl > 0.01) { g.globalAlpha = 0.07 * gl; g.fillStyle = '#fff'; for (let k = 0; k < 40; k++) g.fillRect(Math.random() * W, Math.random() * H, 2, 2); g.globalAlpha = 1; }
-    g.fillStyle = 'rgba(0,0,0,0.14)'; for (let yy = 0; yy < H; yy += 4) g.fillRect(0, yy, W, 1);
+    if (!this.scan || this.scan.width !== W || this.scan.height !== H) { this.scan = document.createElement('canvas'); this.scan.width = W; this.scan.height = H; const sg2 = this.scan.getContext('2d'); sg2.fillStyle = 'rgba(0,0,0,0.14)'; for (let yy = 0; yy < H; yy += 4) sg2.fillRect(0, yy, W, 1); }
+    g.drawImage(this.scan, 0, 0);
     g.restore();
   }
 };
@@ -1630,6 +1643,17 @@ const CAM = {
       const va = this.video.videoWidth / this.video.videoHeight, ba = this.bgCanvas.width / this.bgCanvas.height;
       if (va && Math.abs(va - ba) > 0.02 && !this.aspWarn) { this.aspWarn = true; toast('La webcam ha cambiato formato da quando hai registrato la scena vuota: registrala di nuovo'); }
     }
+    // Leggerezza: si ridisegna solo se c'è un fotogramma nuovo della webcam, se cambia un'impostazione o se c'è un'animazione (disturbo)
+    {
+      const has0 = this.ok && this.video.readyState >= 2 && this.video.videoWidth > 0, fg = frameGeom();
+      const anim = !has0 ? Math.floor(t / 100) : (vsr.fx !== false && vsr.gl > 0.01) ? Math.floor(t / 1000 * 12) : 0;
+      const sig = [vsr.fx, vsr.thr, vsr.gl, vsr.col, vsr.mirror, vsr.key, vsr.kc, vsr.tol, vsr.vbg, vsr.vtol, vsr.vmode, fg.view.join(), fg.mask.join(), fg.key, fg.vbg, fg.seg, this.dbg, this.edit, SEG.stamp, this.bgStamp, this.gain.map(x => x.toFixed(2)).join(), this.canvas.width].join('|');
+      if (!(this.fresh || !this.rvfc || sig !== this.lastSig || anim !== this.lastAnim || this.edit)) { this.drew = false; return; }
+      // modalità leggera: fuori registrazione l'anteprima va a 15 fotogrammi al secondo
+      if (S.settings.lite && !isRec() && !this.edit && sig === this.lastSig && t - (this.lastDraw || 0) < 64) { this.drew = false; return; }
+      this.lastDraw = t;
+      this.lastSig = sig; this.lastAnim = anim; this.drew = true;
+    }
     if (this.mode === '2d') {
       const has = this.ok && this.video.readyState >= 2 && this.video.videoWidth > 0;
       const fresh = this.fresh || !this.rvfc; if (has && !this.rvfc) this.camFrames++;
@@ -1736,7 +1760,10 @@ const OUT = {
     // Se non c'è niente da sovrapporre si mostra direttamente la webcam elaborata (più leggero)
     const pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub;
     if (pass !== this.pass) { this.pass = pass; src.style.display = pass ? 'block' : 'none'; this.cv.style.display = pass ? 'none' : 'block'; }
-    if (pass) return;
+    if (pass) { this.drew = false; return; }
+    const animOv = this.sub || (ov.bg === 'video' && this.bgv) || CAM.edit;
+    if (!CAM.drew && !animOv && this.lastOv === JSON.stringify(ov) && this.lastR === r.join()) { this.drew = false; return; }
+    this.lastOv = JSON.stringify(ov); this.lastR = r.join(); this.drew = true;
     if (ov.bg === 'video' && this.bgv && this.bgv.paused) this.bgv.play().catch(() => {});
     if (behind) { this.drawBg(g, W, H, src, r); g.drawImage(src, 0, 0, W, H); }
     else if (full) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.drawImage(src, 0, 0, W, H); }
@@ -2132,9 +2159,10 @@ const TP = {
     $('ptMirror').setAttribute('aria-pressed', String(this.mirror));
     $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode; $('ptMode').value = this.mode;
     $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); $('ptRun').classList.toggle('waiting', !!(this.running && this.voiceWait)); $('ptSpeedGrp').hidden = this.mode === 'follow';
+    this.vh = 0;
     $('prompter').hidden = !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
   },
-  lineY() { return this.view.clientHeight * 0.3; },
+  lineY() { if (!this.vh || performance.now() - (this.vhT || 0) > 500) { this.vh = this.view.clientHeight; this.vhT = performance.now(); } return this.vh * 0.3; },
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
   syncFired() { const ly = this.lineY(); for (const c of this.cues) c.dataset.fired = (this.cueY(c) <= ly || c.dataset.pre === '1') ? '1' : '0'; },
   setTop(y) { this.view.scrollTop = y; this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); VF.resync(); },
@@ -2366,6 +2394,7 @@ function drawMeter(cv, db, ref) {
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const vert = h > w, L = vert ? h : w, pos = (d) => Math.max(0, Math.min(1, (d + 60) / 60)) * L;
   const now2 = performance.now(); if (db > ref.hold || now2 - ref.holdT > 1500) { ref.hold = db; ref.holdT = now2; }
+  const key = Math.round(Math.max(-61, db) * 2) + '|' + Math.round(Math.max(-61, ref.hold) * 2) + '|' + cv.width + 'x' + cv.height; if (ref.lastKey === key) return; ref.lastKey = key;
   g.fillStyle = '#02040a'; g.fillRect(0, 0, w, h);
   const grd = vert ? g.createLinearGradient(0, h, 0, 0) : g.createLinearGradient(0, 0, w, 0);
   grd.addColorStop(0, '#00c8a0'); grd.addColorStop(0.62, '#3aff9a'); grd.addColorStop(0.8, '#ffe600'); grd.addColorStop(0.92, '#ff8a00'); grd.addColorStop(1, '#ff2b4a');
@@ -2488,20 +2517,23 @@ const LV = {
 };
 let meterRefs = null;
 const FPS = { t: 0 };
+const PERF = { work: 0, t0: 0, pct: 0 };
 const MICPK = { v: -100, t: 0 };
 const tbuf = new Float32Array(2048);
 function peakDb(an) { an.getFloatTimeDomainData(tbuf); let p = 0; for (let i = 0; i < tbuf.length; i++) { const a = Math.abs(tbuf[i]); if (a > p) p = a; } return p > 0 ? 20 * Math.log10(p) : -100; }
 function loop(t) {
+  const w0 = performance.now();
   if (E.ctx) {
     const T = isRec() ? Math.max(0, tlAt(now())) : R.state === 'hold' ? R.len / E.sr : 0;
-    $('tc').textContent = fmt(R.state === 'preroll' ? R.Tanchor : T);
-    if (meterRefs) {
+    const tcs = fmt(R.state === 'preroll' ? R.Tanchor : T); if (tcs !== loop.tcs) { $('tc').textContent = tcs; loop.tcs = tcs; }
+    const meterTick = t - (loop.mt || 0) >= (S.settings.lite ? 64 : 32); if (meterTick) loop.mt = t;
+    if (meterRefs && meterTick) {
       const set = (ch, an) => { const r = meterRefs[ch]; if (r && r.cv) drawMeter(r.cv, peakDb(an), r); };
       set('voice', E.micAn); for (const ch of chsOf()) if (E.an[ch]) set(ch, E.an[ch]);
       const mr = meterRefs.master; if (mr) {
-        set('master', E.micAn); const lv = LV.read();
-        if (lv) { const v = lv.s; mr.num.textContent = v < -70 ? '—' : v.toFixed(1); const st = v < -70 ? ['Parla: misuro la voce come suonerà nel file.', 'var(--dim)'] : v < -30 ? ['Molto basso: alza «Ingresso mic» o avvicinati al microfono', 'var(--rec)'] : v < -24 ? ['Basso: alza un po\' «Ingresso mic»', 'var(--warn)'] : v > -10 ? ['Troppo alto: abbassa «Ingresso mic»', 'var(--rec)'] : ['Buono', 'var(--ok)'];
-          mr.hint.textContent = st[0]; mr.num.style.color = st[1]; }
+        set('master', E.micAn); const lv = t - (loop.lt || 0) >= 100 ? (loop.lt = t, LV.read()) : null;
+        if (lv) { const v = lv.s, nt = v < -70 ? '—' : v.toFixed(1); if (mr.num.textContent !== nt) mr.num.textContent = nt; const st = v < -70 ? ['Parla: misuro la voce come suonerà nel file.', 'var(--dim)'] : v < -30 ? ['Molto basso: alza «Ingresso mic» o avvicinati al microfono', 'var(--rec)'] : v < -24 ? ['Basso: alza un po\' «Ingresso mic»', 'var(--warn)'] : v > -10 ? ['Troppo alto: abbassa «Ingresso mic»', 'var(--rec)'] : ['Buono', 'var(--ok)'];
+          if (mr.hint.textContent !== st[0]) { mr.hint.textContent = st[0]; mr.num.style.color = st[1]; } }
       }
       if (!$('devModal').hidden) {
         const db = peakDb(E.micAn); const el = $('dMicMeter'); el.style.width = Math.max(0, Math.min(100, (db + 60) / 60 * 100)) + '%'; el.style.setProperty('--mw', (el.parentElement.clientWidth || 300) + 'px');
@@ -2511,19 +2543,22 @@ function loop(t) {
         lv.style.color = pk < -24 || pk > -2 ? 'var(--warn)' : 'var(--ok)';
       }
     }
-    const prog = (ch, el) => { const v = E.voices[ch]; el.style.width = v ? Math.min(100, posOf(v, now()) / v.dur * 100) + '%' : '0%'; };
-    for (const id in DECKUI.cards) prog(id, DECKUI.cards[id].prog);
+    const prog = (ch, el) => { const v = E.voices[ch], w = v ? Math.min(100, posOf(v, now()) / v.dur * 100).toFixed(1) + '%' : '0%'; if (el.dataset.w !== w) { el.style.width = w; el.dataset.w = w; } };
+    if (meterTick) for (const id in DECKUI.cards) prog(id, DECKUI.cards[id].prog);
     TP.frame(t || performance.now());
     CAM.render(t || performance.now()); OUT.render(t || performance.now());
     const tn = performance.now(); if (!FPS.t) FPS.t = tn;
     if (tn - FPS.t >= 1000) { const sec = (tn - FPS.t) / 1000; const cf = Math.round(CAM.camFrames / sec), ef = Math.round((V.encFrames || 0) / sec); CAM.camFrames = 0; V.encFrames = 0; FPS.t = tn;
       const el = $('vFps'); if (el) el.textContent = CAM.ok ? `Webcam: ${cf} fps` + (V.active && R.state === 'rec' ? ` · video registrato: ${ef} fps` : '') + (cf && cf < 20 ? ' — la webcam è lenta: di solito è poca luce' : '') : '—'; }
-    if (R.state === 'rec' && V.active) V.frame(OUT.pass ? CAM.canvas : OUT.cv, tlAt(now()));
+    if (R.state === 'rec' && V.active && (OUT.pass ? CAM.drew : OUT.drew)) V.frame(OUT.pass ? CAM.canvas : OUT.cv, tlAt(now()));
     if (LS && R.state === 'hold') paintWave();
     if (PV && PV.playing) PV.tick();
     if (PV && PV.vid) PV.vid.draw(PV.position());
     if (ED.open) ED.frame();
   }
+  // quanto tempo del processore usa l'app a ogni fotogramma (mostrato in Impostazioni → Prestazioni)
+  const wn = performance.now(); PERF.work += wn - w0; if (!PERF.t0) PERF.t0 = wn;
+  if (wn - PERF.t0 >= 2000) { PERF.pct = PERF.work / (wn - PERF.t0) * 100; PERF.work = 0; PERF.t0 = wn; const el = $('perfInfo'); if (el && !$('setModal').hidden) el.textContent = `Lavoro dell'app in questo momento: ${PERF.pct.toFixed(0)}% del tempo del processore principale` + (PERF.pct > 50 ? ' · è tanto: prova la modalità leggera o il video a 540p' : PERF.pct > 25 ? ' · nella norma' : ' · leggero'); }
   requestAnimationFrame(loop);
 }
 
@@ -3561,6 +3596,8 @@ function wire() {
   $('helpBtn').addEventListener('click', () => HELP.toggle());
   $('helpPip').addEventListener('click', async () => { if (!(await HELP.openPip())) toast('Il browser ha bloccato la finestra: consenti i popup per questo sito'); else $('helpModal').hidden = true; });
   $('setHelpRec').value = S.settings.helpOnRec === false ? '0' : '1';
+  $('setLite').value = S.settings.lite ? '1' : '0';
+  $('setLite').addEventListener('change', (e) => { S.settings.lite = e.target.value === '1'; saveSettings(); toast(S.settings.lite ? 'Modalità leggera accesa' : 'Modalità leggera spenta'); });
   $('setHelpRec').addEventListener('change', (e) => { S.settings.helpOnRec = e.target.value === '1'; saveSettings(); });
   $('ptSlow').addEventListener('click', () => { TP.speed = Math.max(1, TP.speed - 1); TP.layout(); TP.save(); });
   $('ptFast').addEventListener('click', () => { TP.speed = Math.min(20, TP.speed + 1); TP.layout(); TP.save(); });

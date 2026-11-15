@@ -7,6 +7,15 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.1.0 — 15/11/2026
+**Prestazioni**
+- Anteprima video ridisegnata solo con fotogrammi nuovi o impostazioni cambiate (firma dello stato); compositore e registrazione video seguono.
+- Mixer: indicatori a 30 fps e solo se cambiano (gradiente e disegno saltati); LUFS a 10 Hz; contatore e barre aggiornati solo se cambiano.
+- Effetto 2D: ciclo Sobel senza controlli per pixel, righe di scansione precalcolate, un solo drawImage senza disturbo.
+- Persone: segmentazione max 15 fps. Teleprompter: altezza misurata al massimo ogni 0,5 s.
+- Modalità leggera (anteprima 15 fps fuori registrazione, mixer 15 fps) e indicatore del lavoro dell'app in Impostazioni → Prestazioni.
+- Misure (media di 3 prove, Chromium senza GPU): studio fermo con effetto 67%→46% (leggera 23%, leggera+540p 19%); senza effetto 51%→24%; registrazione 92%→72% (540p 53%).
+
 ## V4.0.4 — 15/11/2026
 - Corretto: R, Spazio e TERMINA erano ignorati durante il riascolto dopo un re-take (l'errore restava nella puntata). Ora R riapre il re-take e torna più indietro; la musica ripresa per il riascolto si ferma e riparte dal nuovo punto.
 - Avviso durante il riascolto.
