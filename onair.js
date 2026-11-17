@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.1.0' };
+const APP = { name: 'GPverse OnAir', version: '4.2.0' };
 
 const CHANGELOG = [
+  { v: '4.2.0', date: '17/11/2026', title: 'Stacchetti a tempo con la voce e controllo della dizione', items: [
+    '«Segue le parole che leggo»: i segnali ([CAPITOLO], [SIGLA], [SOTTOFONDO]…) partono appena hai letto l\'ultima parola che li precede, anche se leggi più veloce del testo e il segnale non è ancora arrivato alla riga di lettura. Se l\'ultima parola non viene riconosciuta, partono dopo una pausa di poco più di un secondo a fine frase.',
+    'Controllo della dizione in tempo reale: le parole che il riconoscimento non ha capito vengono sottolineate in rosso sul testo, e l\'indicatore «Dizione %» accanto al menu mostra quante parole delle ultime frasi sono arrivate chiare (verde dal 90%, giallo dal 75%, rosso sotto).'
+  ] },
   { v: '4.1.0', date: '15/11/2026', title: 'App più leggera', items: [
     'Il video in anteprima si ridisegna solo quando la webcam manda un fotogramma nuovo (o cambi un\'impostazione), non più 60 volte al secondo.',
     'Indicatori del mixer aggiornati 30 volte al secondo e solo se il valore cambia; contatore, barre di avanzamento e misura del volume voce senza lavoro inutile.',
@@ -2073,13 +2077,18 @@ const VAD = {
 };
 /* «Segue le parole»: riconoscimento vocale del browser; il testo va avanti man mano che leggi */
 const VF = {
-  rec: null, on: false, words: [], pos: 0, target: null, err: null, readTo: 0,
+  rec: null, on: false, words: [], pos: 0, target: null, err: null, readTo: 0, ok: new Set(), lastHeard: 0,
   supported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
-  index() { if (!TP.el) return; this.words = [...TP.el.querySelectorAll('.w')].map(el => ({ el, n: normW(el.textContent) })); this.resync(); },
+  index() {
+    if (!TP.el) return; this.words = []; this.ok = new Set();
+    // ogni segnale sa quante parole lo precedono: così parte quando hai letto la frase prima, anche in anticipo sulla riga
+    for (const el of TP.el.querySelectorAll('.w, .cue')) { if (el.classList.contains('cue')) el.dataset.wi = String(this.words.length); else this.words.push({ el, n: normW(el.textContent) }); }
+    this.resync();
+  },
   resync() {
     if (!TP.view || !this.words.length) { this.pos = 0; this.target = null; return; }
     const y = TP.view.scrollTop + TP.lineY() - 2; let i = this.words.findIndex(w => w.el.offsetTop + w.el.offsetHeight > y); if (i < 0) i = this.words.length;
-    this.pos = i; this.target = null; this.mark(i);
+    this.pos = i; this.target = null; this.mark(i); this.score();
   },
   mark(i) {
     const a = Math.min(this.readTo, i), b = Math.max(this.readTo, i);
@@ -2090,7 +2099,7 @@ const VF = {
     if (this.on) return; if (!this.supported()) return this.fail('il browser non ha il riconoscimento vocale');
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition, r = new SR();
     r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-    r.onresult = (e) => { let txt = ''; for (let i = e.resultIndex; i < e.results.length; i++) txt += ' ' + e.results[i][0].transcript; this.hear(txt); };
+    r.onresult = (e) => { let txt = '', fin = true; for (let i = e.resultIndex; i < e.results.length; i++) { txt += ' ' + e.results[i][0].transcript; if (!e.results[i].isFinal) fin = false; } this.hear(txt, fin); };
     r.onerror = (e) => { if (['not-allowed', 'service-not-allowed', 'network', 'language-not-supported', 'audio-capture'].includes(e.error)) this.fail(e.error === 'network' ? 'serve la connessione a internet' : e.error); };
     r.onend = () => { if (this.on) setTimeout(() => { if (this.on) this.go(); }, 150); };
     this.rec = r; this.on = true; this.resync(); this.go(); TP.layout();
@@ -2098,8 +2107,9 @@ const VF = {
   go() { const tr = E.micStream && E.micStream.getAudioTracks()[0]; try { tr ? this.rec.start(tr) : this.rec.start(); } catch (e) { try { this.rec.start(); } catch (e2) {} } },
   stop() { if (!this.on) return; this.on = false; try { this.rec.abort(); } catch (e) {} this.rec = null; TP.layout && TP.el && TP.layout(); },
   fail(why) { this.err = why; this.stop(); TP.mode = 'voice'; TP.save(); TP.layout(); toast('«Segue le parole» non disponibile (' + why + '): passo a «Quando parlo»'); },
-  hear(txt) {
-    const tail = txt.split(/\s+/).map(normW).filter(Boolean).slice(-6); if (!tail.length || !this.words.length) return;
+  hear(txt, fin) {
+    const said = txt.split(/\s+/).map(normW).filter(Boolean), tail = said.slice(-6); if (!tail.length || !this.words.length) return;
+    this.lastHeard = performance.now();
     const W = this.words, L = tail.length, sim = (a, b) => a === b ? 1 : (a.length >= 4 && b.length >= 4 && a.slice(0, 4) === b.slice(0, 4)) ? 0.7 : 0;
     let best = -1, bs = 0;
     for (let j = Math.max(0, this.pos - 8); j < Math.min(W.length, this.pos + 80); j++) {
@@ -2111,7 +2121,30 @@ const VF = {
     const near = best >= this.pos && best <= this.pos + 3 && W[best].n.length >= 5 && tail[L - 1] === W[best].n;
     if (bs < 1.6 && !near) return;
     if (best + 1 < this.pos - 2 && bs < 3) return;
-    this.pos = best + 1; this.target = W[best].el; this.mark(this.pos);
+    const from = this.pos;
+    // dizione: allinea le ultime parole dette al testo; quelle del testo che il riconoscimento non ha sentito sono «mangiate»
+    { let i = said.length - 1, j = best; const stop = Math.max(0, Math.min(from, best) - 3), lim = Math.max(stop, best - 25);
+      while (i >= 0 && j >= lim) {
+        if (sim(said[i], W[j].n) > 0) { this.ok.add(j); W[j].el.classList.remove('miss'); i--; j--; }
+        else if (j - 1 >= lim && sim(said[i], W[j - 1].n) > 0) j--;
+        else if (j - 2 >= lim && sim(said[i], W[j - 2].n) > 0) j -= 2;
+        else if (i - 1 >= 0 && sim(said[i - 1], W[j].n) > 0) i--;
+        else { i--; j--; }
+      }
+      // solo a frase chiusa (risultato definitivo) si segna una parola come mangiata
+      if (fin) for (let k = Math.max(0, from - 1); k <= best; k++) if (!this.ok.has(k) && W[k].n.length > 2) W[k].el.classList.add('miss'); }
+    this.pos = best + 1; this.target = W[best].el; this.mark(this.pos); this.score();
+    TP.cuesByWords();
+  },
+  /* Dizione: percentuale di parole capite nelle ultime ~40 lette */
+  score() {
+    const el = $('ptDiction'); if (!el) return;
+    const show = TP.mode === 'follow' && this.on; el.hidden = !show; if (!show) return;
+    const a = Math.max(0, this.pos - 40); let tot = 0, ok = 0;
+    for (let k = a; k < this.pos; k++) { if (this.words[k].n.length <= 2) continue; tot++; if (!this.words[k].el.classList.contains('miss')) ok++; }
+    if (tot < 8) { el.textContent = 'Dizione —'; el.className = 'grp dic'; el.title = 'Leggi ancora qualche frase: misuro quante parole arrivano chiare'; return; }
+    const p = Math.round(ok / tot * 100); el.textContent = 'Dizione ' + p + '%'; el.className = 'grp dic ' + (p >= 90 ? 'good' : p >= 75 ? 'mid' : 'bad');
+    el.title = p >= 90 ? 'Le parole arrivano chiare' : p >= 75 ? 'Qualche parola non si capisce: sono sottolineate in rosso' : 'Molte parole non si capiscono: rallenta e scandisci';
   }
 };
 /* Segnali nel testo: [NOME] e [STOP NOME] per ogni categoria (con il numero per gli stacchetti: [CAPITOLO 3]), più [PAUSA] e [ISCRIVITI] */
@@ -2158,7 +2191,7 @@ const TP = {
     $('ptAuto').setAttribute('aria-pressed', String(this.auto));
     $('ptMirror').setAttribute('aria-pressed', String(this.mirror));
     $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode; $('ptMode').value = this.mode;
-    $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); $('ptRun').classList.toggle('waiting', !!(this.running && this.voiceWait)); $('ptSpeedGrp').hidden = this.mode === 'follow';
+    $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); VF.score(); $('ptRun').classList.toggle('waiting', !!(this.running && this.voiceWait)); $('ptSpeedGrp').hidden = this.mode === 'follow';
     this.vh = 0;
     $('prompter').hidden = !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
   },
@@ -2191,6 +2224,8 @@ const TP = {
       this.view.scrollTop = this.acc; this.expect = this.view.scrollTop;
       if (this.view.scrollTop + this.view.clientHeight >= this.view.scrollHeight - 1) { this.running = false; this.layout(); }
     }
+    // pausa dopo l'ultima frase prima di un segnale: anche se l'ultima parola non è stata riconosciuta, il segnale parte
+    if (follow && this.running && VF.on && VF.lastHeard && performance.now() - VF.lastHeard > 1200) this.cuesByWords(true);
     if (R.state === 'rec' && this.auto) {
       const ly = this.lineY();
       for (const c of this.cues) {
@@ -2201,6 +2236,16 @@ const TP = {
       }
     }
     if (R.state === 'rec' && t - this.lastLog > 200) { this.lastLog = t; R.tpLog.push({ t: tlAt(now()), y: this.view.scrollTop, run: this.running }); }
+  },
+  /* «Segue le parole»: un segnale parte appena hai letto tutte le parole che lo precedono, anche se il testo non è ancora arrivato alla riga */
+  cuesByWords(silent) {
+    if (this.mode !== 'follow' || R.state !== 'rec' || !this.auto) return;
+    const ly = this.lineY();
+    for (const c of this.cues) {
+      if (c.dataset.fired === '1' || c.dataset.wi == null) continue;
+      const wi = +c.dataset.wi, need = silent ? wi - 1 : wi;
+      if (VF.pos >= need && VF.pos <= wi + 2) { c.dataset.fired = '1'; if (this.cueY(c) > ly) c.dataset.pre = '1'; this.fire(c); }
+    }
   },
   fire(c) {
     c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 900);

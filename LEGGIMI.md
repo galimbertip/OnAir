@@ -1,4 +1,4 @@
-# GPverse OnAir V4.1.0 — Come si usa
+# GPverse OnAir V4.2.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -63,7 +63,7 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 
 **Categorie audio:** in Impostazioni → Categorie audio aggiungi le tue (per esempio «Applausi»): scegli il comportamento (Singolo, In loop, Stacchetti), il colore e se deve fermare il sottofondo mentre suona. Compare un riquadro nuovo dove carichi i file; il tasto lo scegli in Scorciatoie; nel testo scrivi [APPLAUSI] per lanciarla da sola.
 
-**Teleprompter che segue la voce:** nel menu del teleprompter (o con il tasto M) scegli «Segue le parole che leggo»: il testo avanza mentre leggi e aspetta quando ti fermi o improvvisi. Usa il riconoscimento vocale di Chrome, quindi serve internet; senza, scegli «Scorre quando parlo». **Tasti:** H apre lo specchietto; «⧉ Finestra sempre in primo piano» lo tiene sopra tutto mentre registri.
+**Teleprompter che segue la voce:** nel menu del teleprompter (o con il tasto M) scegli «Segue le parole che leggo»: il testo avanza mentre leggi e aspetta quando ti fermi o improvvisi. In questo modo gli stacchetti partono quando hai letto l'ultima parola prima del segnale, anche se sei in anticipo sul testo, e le parole che «mangi» vengono sottolineate in rosso, con l'indicatore «Dizione %» accanto al menu. Usa il riconoscimento vocale di Chrome, quindi serve internet; senza, scegli «Scorre quando parlo». **Tasti:** H apre lo specchietto; «⧉ Finestra sempre in primo piano» lo tiene sopra tutto mentre registri.
 
 **Rumore di tastiera e di fondo:** Impostazioni → Pulizia della voce. Accendi «Riduzione rumore AI» e «Noise gate», poi premi «🎙 Prova», parla e scrivi per 6 secondi, e riascolta originale e pulita. Alza la «Soglia del gate» finché, mentre scrivi senza parlare, la spia GATE resta grigia (e diventa verde quando parli). La pulizia si applica mentre registri.
 
