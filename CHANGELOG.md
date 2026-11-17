@@ -7,6 +7,10 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.2.1 — 17/11/2026
+- Dopo uno stacchetto lanciato dalle parole lette, il testo si allinea alla prima parola dopo l'etichetta.
+- Ogni segnale parte una volta per registrazione (frecce e rotellina non lo rilanciano); un re-take che torna prima del segnale lo riattiva.
+
 ## V4.2.0 — 17/11/2026
 - «Segue le parole»: ogni segnale conosce quante parole lo precedono e parte quando l'ultima è stata riconosciuta (o dopo 1,2 s senza parole nuove a fine frase), senza aspettare la riga di lettura; non riparte quando il testo la raggiunge.
 - Dizione: allineamento delle parole riconosciute al testo; le parole non sentite (a risultato definitivo) sono sottolineate in rosso; indicatore «Dizione %» sulle ultime ~40 parole.

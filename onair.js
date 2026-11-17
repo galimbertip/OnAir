@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.2.0' };
+const APP = { name: 'GPverse OnAir', version: '4.2.1' };
 
 const CHANGELOG = [
+  { v: '4.2.1', date: '17/11/2026', title: 'Testo allineato dopo lo stacchetto', items: [
+    'Quando uno stacchetto parte perché hai finito di leggere la frase prima del segnale, il testo scorre subito dopo l\'etichetta: sulla riga di lettura trovi la frase che viene dopo.',
+    'Ogni segnale parte una volta sola: muovendo il testo con le frecce o la rotellina uno stacchetto già partito non riparte. Si riattiva solo se fai un re-take che torna a prima del segnale.'
+  ] },
   { v: '4.2.0', date: '17/11/2026', title: 'Stacchetti a tempo con la voce e controllo della dizione', items: [
     '«Segue le parole che leggo»: i segnali ([CAPITOLO], [SIGLA], [SOTTOFONDO]…) partono appena hai letto l\'ultima parola che li precede, anche se leggi più veloce del testo e il segnale non è ancora arrivato alla riga di lettura. Se l\'ultima parola non viene riconosciuta, partono dopo una pausa di poco più di un secondo a fine frase.',
     'Controllo della dizione in tempo reale: le parole che il riconoscimento non ha capito vengono sottolineate in rosso sul testo, e l\'indicatore «Dizione %» accanto al menu mostra quante parole delle ultime frasi sono arrivate chiare (verde dal 90%, giallo dal 75%, rosso sotto).'
@@ -2244,10 +2248,16 @@ const TP = {
     for (const c of this.cues) {
       if (c.dataset.fired === '1' || c.dataset.wi == null) continue;
       const wi = +c.dataset.wi, need = silent ? wi - 1 : wi;
-      if (VF.pos >= need && VF.pos <= wi + 2) { c.dataset.fired = '1'; if (this.cueY(c) > ly) c.dataset.pre = '1'; this.fire(c); }
+      if (VF.pos >= need && VF.pos <= wi + 2) {
+        c.dataset.fired = '1'; if (this.cueY(c) > ly) c.dataset.pre = '1'; this.fire(c);
+        // il testo si porta subito dopo l'etichetta: sulla riga di lettura c'è la frase che viene dopo
+        const nx = VF.words[wi]; if (nx) { VF.pos = wi; VF.target = nx.el; VF.mark(wi); }
+      }
     }
   },
   fire(c) {
+    // ogni segnale parte una volta sola: muovendo il testo con frecce o rotellina non riparte (solo un re-take che torna prima lo riattiva)
+    if (c.dataset.done === '1') return; c.dataset.done = '1';
     c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 900);
     const k = c.dataset.cue, n = +c.dataset.n;
     if (k === 'ISCRIVITI') SUB.start();
@@ -2284,9 +2294,10 @@ const TP = {
     R.tpLog = R.tpLog.filter(e => e.t <= Tq + 0.01);
     let y = null, run = null; for (const e of R.tpLog) { if (e.t <= w0 + 0.01) y = e.y; run = e.run; }
     if (y != null) this.setTop(y);
+    { const ly = this.lineY(); for (const c of this.cues) if (this.cueY(c) > ly) { delete c.dataset.done; delete c.dataset.pre; } }
     this.running = run != null ? run : this.wasRunning; this.lastT = performance.now(); this.layout();
   },
-  onFinish() { this.running = false; this.voiceWait = null; this.pendingLoops.clear(); for (const c of this.cues || []) delete c.dataset.pre; VF.stop(); this.layout(); HELP.onFinish(); },
+  onFinish() { this.running = false; this.voiceWait = null; this.pendingLoops.clear(); for (const c of this.cues || []) { delete c.dataset.pre; delete c.dataset.done; } VF.stop(); this.layout(); HELP.onFinish(); },
   edit(on) {
     $('ptEditBox').hidden = !on; $('ptView').hidden = on;
     if (on) { $('ptArea').value = this.text; $('ptArea').focus(); }
