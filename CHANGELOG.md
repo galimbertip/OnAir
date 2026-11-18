@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.3.0 — 18/11/2026
+- Barra VIDEO: pulsanti rapidi «Logo» (acceso/spento; la prima volta chiede il file) e «🔔 Iscriviti».
+- «Iscriviti» con suono (fruscio, clic, campanella) a tempo con l'animazione: si sente in cuffia, ha la sua riga nel mixer ed è nella puntata esportata.
+- Scelta del suono in «Sfondo, logo e Iscriviti»: campanella, un proprio file o nessuno.
+
 ## V4.2.1 — 17/11/2026
 - Dopo uno stacchetto lanciato dalle parole lette, il testo si allinea alla prima parola dopo l'etichetta.
 - Ogni segnale parte una volta per registrazione (frecce e rotellina non lo rilanciano); un re-take che torna prima del segnale lo riattiva.

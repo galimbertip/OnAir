@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.2.1' };
+const APP = { name: 'GPverse OnAir', version: '4.3.0' };
 
 const CHANGELOG = [
+  { v: '4.3.0', date: '18/11/2026', title: 'Logo e «Iscriviti» a portata di mano, con il suono', items: [
+    'Nella barra VIDEO due pulsanti rapidi: «Logo» (lo accende e spegne; la prima volta chiede il file) e «🔔 Iscriviti».',
+    '«Iscriviti» ora ha il suono: fruscio d\'entrata, clic sul pulsante e campanella, a tempo con l\'animazione. Si sente in cuffia e finisce nella puntata (riga ISCRIVITI nel mixer e traccia nel montaggio).',
+    'In «⚙ Regola → Sfondo, logo e Iscriviti» scegli il suono: campanella, un tuo file o nessuno.' ] },
   { v: '4.2.1', date: '17/11/2026', title: 'Testo allineato dopo lo stacchetto', items: [
     'Quando uno stacchetto parte perché hai finito di leggere la frase prima del segnale, il testo scorre subito dopo l\'etichetta: sulla riga di lettura trovi la frase che viene dopo.',
     'Ogni segnale parte una volta sola: muovendo il testo con le frecce o la rotellina uno stacchetto già partito non riparte. Si riattiva solo se fai un re-take che torna a prima del segnale.'
@@ -622,7 +626,8 @@ function onVoiceEnded(v) {
 const loopSt = (id) => E.loops[id] || (E.loops[id] = { idx: 0, pos: 0, status: 'stopped' });
 const catName = (id) => (catOf(id) || { name: id }).name;
 const ducking = () => Object.values(E.voices).some(v => v && (catOf(v.ch) || {}).duck);
-const singlePlaying = () => CATS().some(c => c.type === 'single' && E.voices[c.id]);
+const userCats = () => CATS().filter(c => !c.sys);
+const singlePlaying = () => userCats().some(c => c.type === 'single' && E.voices[c.id]);
 function holdLoops() {
   const held = {};
   for (const c of CATS()) if (c.type === 'loop') {
@@ -677,8 +682,8 @@ function catAction(id) {
   else { const n = E.next[id] || 0, L = dkList(id); if (!L.length) toast(c.name + ': lista vuota'); else if (n >= L.length) toast(c.name + ': lista finita · usa ⏮ o il numero (1–9) per rilanciarne uno'); listPlay(id, n); }
 }
 function catStop(id) { const c = catOf(id); if (!c) return; if (c.type === 'single') singleStop(id); else if (c.type === 'list') listStop(id); else if (loopSt(id).status === 'playing') loopToggle(id); }
-const firstList = () => CATS().find(c => c.type === 'list');
-const firstSingle = () => CATS().find(c => c.type === 'single');
+const firstList = () => userCats().find(c => c.type === 'list');
+const firstSingle = () => userCats().find(c => c.type === 'single');
 
 /* ------------------------------------------------------------ Registrazione */
 function fmt(t, tenths = true) {
@@ -1789,8 +1794,39 @@ const OUT = {
     if (this.sub) SUB.draw(g, W, H, (t - this.sub) / 1000) || (this.sub = null);
   }
 };
+/* Suono di «Iscriviti»: fruscio d'entrata, clic sul pulsante (a 2,25 s) e campanella (a 2,7 s), a tempo con l'animazione */
+async function makeSubSfx() {
+  const sr = 48000, oc = new OfflineAudioContext(1, Math.round(sr * 4.4), sr), out = oc.createGain(); out.gain.value = 0.9; out.connect(oc.destination);
+  const noise = (len) => { const b = oc.createBuffer(1, Math.round(sr * len), sr), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
+  { const n = oc.createBufferSource(); n.buffer = noise(0.6); const bp = oc.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2; bp.frequency.setValueAtTime(500, 0); bp.frequency.exponentialRampToValueAtTime(3500, 0.45);
+    const g = oc.createGain(); g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(0.22, 0.2); g.gain.linearRampToValueAtTime(0, 0.55); n.connect(bp).connect(g).connect(out); n.start(0); }
+  { const n = oc.createBufferSource(); n.buffer = noise(0.03); const hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500; const g = oc.createGain(); g.gain.setValueAtTime(0.5, 2.25); g.gain.exponentialRampToValueAtTime(0.001, 2.28); n.connect(hp).connect(g).connect(out); n.start(2.25);
+    const o = oc.createOscillator(); o.frequency.value = 1800; const g2 = oc.createGain(); g2.gain.setValueAtTime(0.25, 2.25); g2.gain.exponentialRampToValueAtTime(0.001, 2.27); o.connect(g2).connect(out); o.start(2.25); o.stop(2.3); }
+  for (const [t0, amp] of [[2.7, 0.5], [3.02, 0.33]]) for (const [r, a] of [[1, 1], [2, 0.45], [2.76, 0.3], [5.4, 0.15]]) {
+    const o = oc.createOscillator(); o.type = 'sine'; o.frequency.value = 1318.5 * r; const g = oc.createGain();
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(amp * a * 0.32, t0 + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, t0 + 1.3 / Math.sqrt(r)); o.connect(g).connect(out); o.start(t0); o.stop(t0 + 1.4);
+  }
+  const buf = await oc.startRendering(), d = buf.getChannelData(0), n = d.length, ab = new ArrayBuffer(44 + n * 2), v = new DataView(ab);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, d[i])) * 32767, true);
+  return new Blob([ab], { type: 'audio/wav' });
+}
+/* Il suono vive in una categoria «di sistema» (riga ISCRIVITI nel mixer e traccia nel montaggio), così finisce anche nella puntata */
+async function ensureSubFx() {
+  const cats = CATS(), mode = S.settings.subSound || 'bell'; let c = cats.find(x => x.id === 'subfx');
+  if (mode === 'off') { if (c) cats.splice(cats.indexOf(c), 1); return; }
+  if (!c) { c = { id: 'subfx', name: 'Iscriviti', type: 'single', color: '#ff3b5c', key: '', duck: false, chap: false, cue: '', sys: true }; cats.push(c); }
+  const BELL = 'Iscriviti (campanella).wav', have = S.deck.subfx && S.names.has(S.deck.subfx);
+  // campanella se scelta, o se il tuo file non c'è (es. impostazioni arrivate da un altro PC)
+  if ((mode === 'bell' && (!have || S.names.get(S.deck.subfx) !== BELL)) || (mode === 'custom' && !have)) {
+    const old = [...S.names].find(([, n]) => n === BELL);
+    S.deck.subfx = old ? old[0] : (await addFiles([new File([await makeSubSfx()], BELL, { type: 'audio/wav' })]))[0]; saveDeck();
+  }
+  if (E.ctx) ensureStrip('subfx');
+}
 const SUB = {
-  start() { OUT.sub = performance.now(); },
+  start() { OUT.sub = performance.now(); if ((S.settings.subSound || 'bell') !== 'off' && dk('subfx') && E.ctx) singlePlay('subfx'); },
   rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); },
   bell(g, cx, cy, s, ang) {
     g.save(); g.translate(cx, cy - s * 0.45); g.rotate(ang); g.translate(0, s * 0.45);
@@ -2154,7 +2190,7 @@ const VF = {
 /* Segnali nel testo: [NOME] e [STOP NOME] per ogni categoria (con il numero per gli stacchetti: [CAPITOLO 3]), più [PAUSA] e [ISCRIVITI] */
 function cueRe() {
   const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
-  const words = CATS().map(cueWord).filter(Boolean).sort((a, b) => b.length - a.length).map(esc).join('|');
+  const words = userCats().map(cueWord).filter(Boolean).sort((a, b) => b.length - a.length).map(esc).join('|');
   return new RegExp('\\[((?:STOP\\s+)?(?:' + (words || 'NESSUNO') + ')|PAUSA|ISCRIVITI)(?:\\s+(\\d{1,2}))?\\]', 'giu');
 }
 const TP = {
@@ -2176,7 +2212,7 @@ const TP = {
       let out = '', i = 0;
       for (const m of p.matchAll(re)) {
         out += plain(p.slice(i, m.index)); const kind = m[1].replace(/\s+/g, ' '), n = m[2], k = kind.toUpperCase();
-        const cc = catOf((CATS().find(c => cueWord(c) === k.replace(/^STOP /, '')) || {}).id);
+        const cc = catOf((userCats().find(c => cueWord(c) === k.replace(/^STOP /, '')) || {}).id);
         out += `<span class="cue" data-cue="${esc(k)}" data-n="${n || ''}"${cc ? ` style="--cc:${cc.color}"` : ''}>${esc(k + (n ? ' ' + n : ''))}</span>`; i = m.index + m[0].length;
       }
       return '<p>' + out + plain(p.slice(i)) + '</p>';
@@ -2267,7 +2303,7 @@ const TP = {
       else if (this.mode === 'voice') { this.voiceWait = { quiet: false }; this.layout(); toast('Pausa: il testo riparte quando riprendi a parlare'); }
     }
     else {
-      const stop = /^STOP /.test(k), cat = CATS().find(x => cueWord(x) === k.replace(/^STOP /, '')); if (!cat) return;
+      const stop = /^STOP /.test(k), cat = userCats().find(x => cueWord(x) === k.replace(/^STOP /, '')); if (!cat) return;
       if (stop) catStop(cat.id);
       else if (cat.type === 'single') singlePlay(cat.id);
       else if (cat.type === 'list') listPlay(cat.id, n ? n - 1 : (E.next[cat.id] || 0));
@@ -2343,7 +2379,7 @@ const DECKUI = {
     const host = $('panels'); if (!host) return;
     host.querySelectorAll('.deckc').forEach(el => el.remove()); this.cards = {};
     const mixer = host.querySelector('[data-panel="mixer"]'), fl = firstList();
-    for (const c of CATS()) {
+    for (const c of userCats()) {
       const el = document.createElement('section'); el.className = 'card pnl deckc'; el.dataset.panel = c.id; el.dataset.cat = c.id; el.style.setProperty('--cc', c.color);
       const multi = c.type !== 'single', fid = LEGACY_FILE[c.id] || 'file-' + c.id;
       const note = c.type === 'single' ? (c.duck ? 'Mentre suona, i loop si fermano e poi ripartono.' : '') : c.type === 'loop' ? 'I brani girano uno dopo l\'altro; si mette in pausa e riparte da dove era.' : (c.duck ? 'Mentre suona, i loop si fermano e poi ripartono da dove erano.' : 'Suona sopra i loop senza fermarli.');
@@ -3267,7 +3303,7 @@ const ORIENT = {
 
 /* Disposizione dei pannelli */
 const PANELS_BASE = [['transport', 'Registrazione (contatore e pulsanti)'], ['prompter', 'Teleprompter'], ['video', 'Video']];
-const panelsAll = () => [...PANELS_BASE, ...CATS().map(c => [c.id, c.name]), ['mixer', 'Mixer']];
+const panelsAll = () => [...PANELS_BASE, ...userCats().map(c => [c.id, c.name]), ['mixer', 'Mixer']];
 const panelName = (p) => (panelsAll().find(x => x[0] === p) || [p, p])[1];
 const LAY_PRESETS = {
   classico: { name: 'Classico', order: ['transport', 'prompter', 'video', 'intro', 'bg', 'cap', 'mixer'], w: { transport: '1', prompter: '2/3', video: '1/3', intro: '1/3', bg: '1/3', cap: '1/3', mixer: '1' }, hidden: [], tall: false },
@@ -3416,7 +3452,7 @@ let ACTIONS = [], DEF_KEYS = {};
 /* Le azioni delle categorie (una per categoria) si aggiungono a quelle fisse */
 function rebuildActions() {
   const verb = { single: 'play', loop: 'play / pausa', list: 'lancia il prossimo' };
-  const cat = CATS().map(c => [c.id, c.name + ': ' + verb[c.type], c.key || '']);
+  const cat = userCats().map(c => [c.id, c.name + ': ' + verb[c.type], c.key || '']);
   ACTIONS = [...ACTIONS_BASE.slice(0, 2), ...cat, ...ACTIONS_BASE.slice(2)];
   DEF_KEYS = Object.fromEntries(ACTIONS.map(a => [a[0], a[2]]));
 }
@@ -3477,7 +3513,7 @@ const HELP = {
     for (const c of CATS()) if (c.type === 'list') { const a = dkList(c.id), nx = E.next[c.id] || 0; extra[c.id] = a[nx] ? 'prossimo: ' + nameOf(a[nx]).replace(/\.[^.]+$/, '') : ''; } else if (c.type === 'loop' && loopSt(c.id).status === 'held') extra[c.id] = 'in attesa';
     let h = `<div class="st">${st}${R.state === 'hold' ? ' · ← → secondi · Invio conferma · Esc annulla' : ''}</div>`;
     for (const [g, acts0] of HELP_GROUPS) {
-      const acts = acts0 || chsOf();
+      const acts = acts0 || userCats().map(c => c.id);
       h += `<section><h4>${g.toUpperCase()}</h4>`;
       for (const a of acts) h += `<div class="hr${on[a] ? ' on' : ''}"><span>${e2(name(a))}${extra[a] ? ` <small style="opacity:.7">(${e2(extra[a])})</small>` : ''}</span><span class="kbd">${e2(keyLabel(a))}</span></div>`;
       if (g === 'Audio' && firstList()) h += `<div class="hr"><span>${e2(firstList().name)}: numero diretto</span><span class="kbd">1–9</span></div>`;
@@ -3559,7 +3595,7 @@ function onKeyMain(e) {
 function renderInsButtons() {
   const box = $('ptIns'); if (!box) return; const ins = [], help = [];
   const e2 = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  for (const c of CATS()) {
+  for (const c of userCats()) {
     const w = cueWord(c);
     if (c.type === 'single') { ins.push(`[${w}]`); help.push(`[${w}] fa partire ${c.name}`); }
     else if (c.type === 'loop') { ins.push(`[${w}]`, `[STOP ${w}]`); help.push(`[${w}] avvia ${c.name} · [STOP ${w}] lo mette in pausa`); }
@@ -3573,8 +3609,8 @@ function renderInsButtons() {
 const CAT_COLORS = ['#00b3ff', '#ff7a00', '#b46bff', '#ff4d6d', '#7dff3a', '#00ffd0', '#ffb3f0', '#ffffff'];
 const CATUI = {
   render() {
-    const box = $('catList'); if (!box) return; box.replaceChildren(); const cats = CATS();
-    cats.forEach((c, i) => {
+    const box = $('catList'); if (!box) return; box.replaceChildren(); const cats = CATS(), shown = cats.filter(c => !c.sys);
+    shown.forEach((c, k) => { const i = cats.indexOf(c);
       const r = document.createElement('div'); r.className = 'catrow'; r.style.setProperty('--cc', c.color);
       r.innerHTML = `<input type="color" title="Colore" aria-label="Colore"><input type="text" class="nm" aria-label="Nome" maxlength="24">
         <select class="ty" aria-label="Comportamento">${Object.entries(CAT_TYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
@@ -3585,7 +3621,7 @@ const CATUI = {
       const q = (k) => r.querySelector(k);
       q('input[type=color]').value = c.color; q('.nm').value = c.name; q('.ty').value = c.type; q('.cu').value = c.cue || ''; q('.cu').placeholder = cueWord(c);
       q('.du').checked = !!c.duck; q('.du').disabled = c.type === 'loop'; q('.ch').checked = !!c.chap; q('.ch').disabled = c.type === 'loop';
-      q('.up').disabled = i === 0; q('.dn').disabled = i === cats.length - 1; q('.rm').disabled = cats.length <= 1;
+      q('.up').disabled = k === 0; q('.dn').disabled = k === shown.length - 1; q('.rm').disabled = shown.length <= 1;
       const set = (fn) => { if (R.state !== 'idle') { this.render(); return toast('Cambia le categorie a registrazione ferma'); } fn(); this.apply(); };
       q('input[type=color]').addEventListener('change', (e) => set(() => { c.color = e.target.value; }));
       q('.nm').addEventListener('change', (e) => set(() => { const v = e.target.value.trim(); if (v) c.name = v; }));
@@ -3593,8 +3629,8 @@ const CATUI = {
       q('.ty').addEventListener('change', (e) => set(() => { if (E.voices[c.id]) stopVoice(c.id); delete E.loops[c.id]; c.type = e.target.value; if (c.type === 'loop') { c.duck = false; c.chap = false; } }));
       q('.du').addEventListener('change', (e) => set(() => { c.duck = e.target.checked; }));
       q('.ch').addEventListener('change', (e) => set(() => { c.chap = e.target.checked; }));
-      q('.up').addEventListener('click', () => set(() => { cats.splice(i, 1); cats.splice(i - 1, 0, c); }));
-      q('.dn').addEventListener('click', () => set(() => { cats.splice(i, 1); cats.splice(i + 1, 0, c); }));
+      q('.up').addEventListener('click', () => set(() => { const o = shown[k - 1]; cats.splice(i, 1); cats.splice(cats.indexOf(o), 0, c); }));
+      q('.dn').addEventListener('click', () => set(() => { const o = shown[k + 1]; cats.splice(i, 1); cats.splice(cats.indexOf(o) + 1, 0, c); }));
       q('.rm').addEventListener('click', () => {
         const n = dkList(c.id).length; if (!confirm(`Eliminare la categoria «${c.name}»?` + (n ? ` I suoi ${n} brani escono dal deck (restano nelle sessioni già registrate).` : ''))) return;
         set(() => { if (E.voices[c.id]) stopVoice(c.id); cats.splice(i, 1); delete S.deck[c.id]; delete E.loops[c.id]; delete E.next[c.id]; });
@@ -3606,7 +3642,8 @@ const CATUI = {
     if (R.state !== 'idle') return toast('Aggiungi categorie a registrazione ferma');
     const cats = CATS(), used = cats.map(c => c.color), color = CAT_COLORS.find(c => !used.includes(c)) || CAT_COLORS[cats.length % CAT_COLORS.length];
     let n = 1; while (cats.some(c => c.name === 'Categoria ' + n)) n++;
-    cats.push({ id: 'c' + Date.now().toString(36), name: 'Categoria ' + n, type: 'list', color, key: '', duck: false, chap: false, cue: '' });
+    const sysAt = cats.findIndex(c => c.sys); // le nuove vanno prima di quelle di sistema (Iscriviti resta in fondo)
+    cats.splice(sysAt < 0 ? cats.length : sysAt, 0, { id: 'c' + Date.now().toString(36), name: 'Categoria ' + n, type: 'list', color, key: '', duck: false, chap: false, cue: '' });
     this.apply(); toast('Nuova categoria: dalle un nome e scegli come si comporta');
   },
   /* Dopo ogni modifica: tasti, deck, mixer, disposizione e segnali del teleprompter si ricostruiscono */
@@ -3622,7 +3659,7 @@ const CATUI = {
 function wire() {
   DECKUI.build();
   CATUI.render(); $('catAdd').addEventListener('click', () => CATUI.add());
-  $('catReset').addEventListener('click', () => { if (R.state !== 'idle') return toast('A registrazione ferma'); if (!confirm('Tornare alle tre categorie di base (Sigla, Sottofondo, Capitoli)? Le altre categorie e i loro brani escono dal deck.')) return; for (const ch of Object.keys(E.voices)) if (E.voices[ch]) stopVoice(ch); S.settings.cats = DEF_CATS(); E.loops = {}; E.next = {}; CATUI.apply(); });
+  $('catReset').addEventListener('click', () => { if (R.state !== 'idle') return toast('A registrazione ferma'); if (!confirm('Tornare alle tre categorie di base (Sigla, Sottofondo, Capitoli)? Le altre categorie e i loro brani escono dal deck.')) return; for (const ch of Object.keys(E.voices)) if (E.voices[ch]) stopVoice(ch); S.settings.cats = DEF_CATS(); E.loops = {}; E.next = {}; ensureSubFx().then(() => CATUI.apply()); });
   $('recBtn').addEventListener('click', () => { if (R.state === 'idle') recStart(); else if (R.state === 'rec' || R.state === 'preroll') enterHold('pause'); else if (R.state === 'hold') commitHold(); });
   $('retakeBtn').addEventListener('click', () => enterHold('retake'));
   // TERMINA mette subito in pausa (il contatore si ferma) e chiede conferma nel pannello
@@ -3727,7 +3764,7 @@ function wire() {
   // Sfondo, logo, Iscriviti
   const ov = S.settings.ov;
   $('ovBg').value = ov.bg; $('ovLogoPos').value = ov.logoPos; $('ovLogoSize').value = ov.logoSize; $('ovLogoOp').value = ov.logoOp;
-  const syncOv = () => { $('ovLogoOn').setAttribute('aria-pressed', String(!!ov.logoOn)); $('ovLogoSizeO').textContent = Math.round(ov.logoSize * 100) + '%'; $('ovLogoOpO').textContent = Math.round(ov.logoOp * 100) + '%'; $('ovBgLoad').hidden = $('ovBgName').hidden = ov.bg !== 'image'; $('ovBgvLoad').hidden = $('ovBgvName').hidden = ov.bg !== 'video'; $('ovBehind').checked = ov.behind !== false; };
+  const syncOv = () => { $('ovLogoOn').setAttribute('aria-pressed', String(!!ov.logoOn)); $('vLogoQ').setAttribute('aria-pressed', String(!!ov.logoOn && !!OUT.logo)); $('ovSubSnd').value = S.settings.subSound || 'bell'; $('ovLogoSizeO').textContent = Math.round(ov.logoSize * 100) + '%'; $('ovLogoOpO').textContent = Math.round(ov.logoOp * 100) + '%'; $('ovBgLoad').hidden = $('ovBgName').hidden = ov.bg !== 'image'; $('ovBgvLoad').hidden = $('ovBgvName').hidden = ov.bg !== 'video'; $('ovBehind').checked = ov.behind !== false; };
   syncOv();
   $('ovBg').addEventListener('change', (e) => { ov.bg = e.target.value; saveSettings(); syncOv(); if (ov.bg === 'image' && !OUT.bg) $('fileOvBg').click(); if (ov.bg === 'video' && !OUT.bgv) $('fileOvBgv').click(); });
   $('ovBgvLoad').addEventListener('click', () => $('fileOvBgv').click());
@@ -3739,6 +3776,17 @@ function wire() {
   });
   $('ovBgLoad').addEventListener('click', () => $('fileOvBg').click());
   $('ovLogoLoad').addEventListener('click', () => $('fileOvLogo').click());
+  // pulsanti rapidi nella barra VIDEO (in vista orizzontale le regolazioni stanno in «⚙ Regola»)
+  $('vLogoQ').addEventListener('click', () => $('ovLogoOn').click());
+  $('vSubQ').addEventListener('click', () => SUB.start());
+  $('ovSubSnd').addEventListener('change', async (e) => {
+    const v = e.target.value; if (v === 'file') { e.target.value = S.settings.subSound || 'bell'; return $('fileSubSnd').click(); }
+    S.settings.subSound = v; saveSettings(); await ensureSubFx(); CATUI.apply(); toast(v === 'off' ? '«Iscriviti» senza suono' : '«Iscriviti» con campanella');
+  });
+  $('fileSubSnd').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return; const [id] = await addFiles([f]);
+    S.settings.subSound = 'custom'; S.deck.subfx = id; saveSettings(); saveDeck(); await ensureSubFx(); CATUI.apply(); syncOv(); toast('Suono di «Iscriviti»: ' + f.name);
+  });
   for (const [inp, key, id] of [['fileOvBg', 'bg', 'ov-bg'], ['fileOvLogo', 'logo', 'ov-logo']]) $(inp).addEventListener('change', async (e) => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     await DB.put('files', id, { name: f.name, type: f.type, blob: f }); await OUT.loadImages();
@@ -3921,6 +3969,7 @@ async function boot() {
       await initMic();
       $('boot').hidden = true; $('app').hidden = false;
       CAM.setup(); OUT.setup(); await OUT.loadImages(); await CAM.loadScene();
+      try { await ensureSubFx(); rebuildActions(); } catch (e) { console.warn('suono iscriviti', e); }
       wire(); renderAll(); TP.render(); requestAnimationFrame(loop);
       if (S.settings.camId !== 'none') await CAM.init(S.settings.camId); else CAM.chosen = 'none';
       await DEV.open(true);

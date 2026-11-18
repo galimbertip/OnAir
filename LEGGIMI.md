@@ -1,4 +1,4 @@
-# GPverse OnAir V4.2.1 — Come si usa
+# GPverse OnAir V4.3.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -33,7 +33,7 @@ Questi sono i tasti predefiniti: puoi cambiarli in **Impostazioni → Scorciatoi
 | P | Teleprompter: avvia / ferma lo scorrimento |
 | ↑ ↓ | Teleprompter: sposta il testo |
 | Shift+↑ / Shift+↓ | Teleprompter: velocità |
-| I | Animazione «Iscriviti» |
+| I | Animazione «Iscriviti» (con suono) |
 | T | Mostra / nascondi il teleprompter |
 | V | Video sì / no |
 
@@ -56,6 +56,8 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 **Inquadratura con green screen:** nel riquadro VIDEO premi «🎯 Scegli il verde» e clicca sul telo, poi «Green screen». Se si vede qualcosa oltre il telo, premi «✂ Scegli area» e trascina un rettangolo attorno a te e al telo: il resto diventa nero. Con «Ingrandisci area» l'area riempie lo schermo.
 
 **Togliere lo sfondo senza telo — modalità «Persone» (consigliata):** in «⚙ Regola» scegli «Persone» in «Togli lo sfondo senza telo». OnAir riconosce te e gli ospiti e toglie tutto il resto, senza registrare niente; funziona anche se la luce cambia o urti la webcam. Serve l'accelerazione grafica attiva nel browser.
+
+**Logo e «Iscriviti»:** nella barra VIDEO il pulsante «Logo» accende e spegne il logo in sovrimpressione (la prima volta ti chiede l'immagine; posizione, dimensione e trasparenza in «⚙ Regola → Sfondo, logo e Iscriviti»). «🔔 Iscriviti» (o il tasto I) lancia l'animazione con il suono: fruscio, clic e campanella. Il suono si sente in cuffia e finisce nella puntata, anche nel solo audio per Spotify; nel mixer ha la sua riga «Iscriviti» per regolarne il volume. Nello stesso riquadro puoi scegliere un tuo suono o nessuno.
 
 **Green screen virtuale con la scena vuota (anche oggetti):** nel riquadro VIDEO premi «🎬 Registra la scena vuota» ed esci dall'inquadratura entro 5 secondi (porta via anche la sedia, se vuoi che sparisca). Quando rientri si vede solo ciò che è nuovo: tu, un ospite, un oggetto. Premi «👁 Vedi cosa resta» (bianco = resta, rosso = tolto) e regola «Pulizia»: alzala se resta qualcosa della stanza, abbassala se sparisce un pezzo di te. OnAir compensa da solo i cambi automatici di luce della webcam. Funziona meglio con luce costante, webcam ferma e vestiti di colore diverso dal muro. In «Sfondo, logo e Iscriviti» scegli cosa mettere al posto della stanza (nero, sfocato, immagine o video) e lascia spuntato «Anche dietro di te».
 
