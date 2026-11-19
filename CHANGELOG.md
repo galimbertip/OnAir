@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.4.0 — 19/11/2026
+- Sigla video: nei riquadri «un file alla volta» si può scegliere un video (mp4/webm); va a tutto schermo nell'anteprima e nel video registrato, a tempo con l'audio.
+- Forma d'onda della sigla sotto l'anteprima: cursore, zona del titolo trovata da sola (dove la musica si abbassa), conto alla rovescia e «PARLA ORA».
+- Zona del titolo correggibile trascinando sulla forma d'onda (doppio clic: automatica).
+
 ## V4.3.0 — 18/11/2026
 - Barra VIDEO: pulsanti rapidi «Logo» (acceso/spento; la prima volta chiede il file) e «🔔 Iscriviti».
 - «Iscriviti» con suono (fruscio, clic, campanella) a tempo con l'animazione: si sente in cuffia, ha la sua riga nel mixer ed è nella puntata esportata.

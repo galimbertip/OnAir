@@ -1,4 +1,4 @@
-# GPverse OnAir V4.3.0 — Come si usa
+# GPverse OnAir V4.4.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -56,6 +56,8 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 **Inquadratura con green screen:** nel riquadro VIDEO premi «🎯 Scegli il verde» e clicca sul telo, poi «Green screen». Se si vede qualcosa oltre il telo, premi «✂ Scegli area» e trascina un rettangolo attorno a te e al telo: il resto diventa nero. Con «Ingrandisci area» l'area riempie lo schermo.
 
 **Togliere lo sfondo senza telo — modalità «Persone» (consigliata):** in «⚙ Regola» scegli «Persone» in «Togli lo sfondo senza telo». OnAir riconosce te e gli ospiti e toglie tutto il resto, senza registrare niente; funziona anche se la luce cambia o urti la webcam. Serve l'accelerazione grafica attiva nel browser.
+
+**Sigla video:** nel riquadro SIGLA premi «📂 Scegli» e scegli il video della sigla (mp4 o webm). Quando parte (tasto, segnale [SIGLA] o avvio della registrazione) il video va a tutto schermo nell'anteprima e nel video registrato per YouTube, a tempo con l'audio; finita la sigla torna la webcam. La musica la senti in cuffia e finisce nella puntata come sempre. Sotto l'anteprima vedi la forma d'onda con il cursore e, in giallo, la zona del titolo (dove la musica si abbassa: OnAir la trova da sola). Il conto alla rovescia ti dice «Titolo tra 3… 2… 1…» e poi «PARLA ORA». Se la zona non è giusta, a registrazione ferma fai partire la sigla e trascina sulla forma d'onda; doppio clic per tornare all'automatico.
 
 **Logo e «Iscriviti»:** nella barra VIDEO il pulsante «Logo» accende e spegne il logo in sovrimpressione (la prima volta ti chiede l'immagine; posizione, dimensione e trasparenza in «⚙ Regola → Sfondo, logo e Iscriviti»). «🔔 Iscriviti» (o il tasto I) lancia l'animazione con il suono: fruscio, clic e campanella. Il suono si sente in cuffia e finisce nella puntata, anche nel solo audio per Spotify; nel mixer ha la sua riga «Iscriviti» per regolarne il volume. Nello stesso riquadro puoi scegliere un tuo suono o nessuno.
 

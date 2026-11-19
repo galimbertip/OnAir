@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.3.0' };
+const APP = { name: 'GPverse OnAir', version: '4.4.0' };
 
 const CHANGELOG = [
+  { v: '4.4.0', date: '19/11/2026', title: 'Sigla video', items: [
+    'Nei riquadri «un file alla volta» (come SIGLA) puoi scegliere anche un video mp4 o webm: mentre suona va a tutto schermo nell\'anteprima e nel video registrato, a tempo con l\'audio; poi torna la webcam.',
+    'Sotto l\'anteprima VIDEO compare la forma d\'onda della sigla con il cursore, la zona gialla del titolo (dove la musica si abbassa, trovata da sola) e il conto alla rovescia «Titolo tra 3… 2… 1…» → «PARLA ORA».',
+    'A registrazione ferma puoi correggere la zona del titolo trascinando sulla forma d\'onda; doppio clic per tornare all\'automatico.' ] },
   { v: '4.3.0', date: '18/11/2026', title: 'Logo e «Iscriviti» a portata di mano, con il suono', items: [
     'Nella barra VIDEO due pulsanti rapidi: «Logo» (lo accende e spegne; la prima volta chiede il file) e «🔔 Iscriviti».',
     '«Iscriviti» ora ha il suono: fruscio d\'entrata, clic sul pulsante e campanella, a tempo con l\'animazione. Si sente in cuffia e finisce nella puntata (riga ISCRIVITI nel mixer e traccia nel montaggio).',
@@ -497,10 +501,18 @@ function applyLevels() { if (!E.ctx) return; for (const ch of allOf()) { ensureS
 
 async function decodeFile(id, sr) {
   const rec = await DB.get('files', id); if (!rec) return null;
+  if (isVidRec(rec)) SIGV.prepare(id, rec.blob);
   const ab = await rec.blob.arrayBuffer();
-  if (!sr || sr === E.sr) return await E.ctx.decodeAudioData(ab);
-  const off = new OfflineAudioContext(2, 1, sr); return await off.decodeAudioData(ab);
+  try {
+    if (!sr || sr === E.sr) return await E.ctx.decodeAudioData(ab);
+    const off = new OfflineAudioContext(2, 1, sr); return await off.decodeAudioData(ab);
+  } catch (e) {
+    if (!isVidRec(rec)) throw e;
+    // video senza audio: un silenzio lungo quanto il video, così si lancia e si registra come le altre sigle
+    const dur = await SIGV.duration(id), r = sr || E.sr; return new AudioBuffer({ numberOfChannels: 2, length: Math.max(1, Math.round(dur * r)), sampleRate: r });
+  }
 }
+const isVidRec = (rec) => /^video\//.test(rec.type || '') || /\.(mp4|m4v|webm|mov)$/i.test(rec.name || '');
 async function loadBuffer(id) {
   if (!id || E.buffers.has(id)) return E.buffers.get(id);
   try { const b = await decodeFile(id); if (b) E.buffers.set(id, b); return b; }
@@ -1721,6 +1733,93 @@ const CAM = {
 };
 
 /* ------------------------------------------------------------------ Compositore: sfondo, webcam, logo, Iscriviti */
+/* ------------------------------------------------ Sigla video e forma d'onda della sigla
+   Il video della sigla segue l'audio (che resta nel motore: mixer, segmenti, esportazione).
+   Sotto l'anteprima: forma d'onda con cursore, zona del titolo (dove la musica si abbassa) e conto alla rovescia. */
+const SIGV = {
+  els: new Map(), peaks: new Map(), cur: null,
+  prepare(id, blob) {
+    if (this.els.has(id)) return this.els.get(id);
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(blob); this.els.set(id, v); return v;
+  },
+  duration(id) { const v = this.els.get(id); return new Promise(res => { if (!v) return res(1); if (v.readyState >= 1) return res(v.duration || 1); v.addEventListener('loadedmetadata', () => res(v.duration || 1), { once: true }); v.addEventListener('error', () => res(1), { once: true }); }); },
+  /* voce «un file alla volta» in corso (escluse quelle di sistema) */
+  voice() { for (const c of userCats()) if (c.type === 'single') { const v = E.voices[c.id]; if (v) return v; } return null; },
+  /* aggiorna il video in base alla voce in corso; restituisce l'elemento da disegnare o null */
+  frameEl() {
+    const v = this.voice(), el = v && this.els.get(v.fileId);
+    if (!el) { if (this.cur) { this.cur.el.pause(); this.cur = null; } return null; }
+    if (!this.cur || this.cur.v !== v) { if (this.cur) this.cur.el.pause(); this.cur = { v, el }; try { el.currentTime = posOf(v, now()); } catch (e) {} el.play().catch(() => {}); }
+    // a tempo con l'audio: piccoli scarti si recuperano accelerando o rallentando appena, quelli grandi con un salto
+    const want = posOf(v, now()), diff = want - el.currentTime;
+    if (Math.abs(diff) > 0.6 && !el.seeking) { try { el.currentTime = want; } catch (e) {} el.playbackRate = 1; }
+    else el.playbackRate = Math.abs(diff) < 0.03 ? 1 : Math.max(0.9, Math.min(1.1, 1 + diff * 0.8));
+    if (el.paused && want < el.duration - 0.05) el.play().catch(() => {});
+    return el;
+  },
+  /* picchi per disegnare la forma d'onda + zona del titolo trovata da sola */
+  info(id) {
+    if (this.peaks.has(id)) return this.peaks.get(id);
+    const b = E.buffers.get(id); if (!b) return null;
+    const N = 600, d0 = b.getChannelData(0), d1 = b.numberOfChannels > 1 ? b.getChannelData(1) : d0, step = Math.max(1, Math.floor(b.length / N)), pk = new Float32Array(N);
+    for (let i = 0; i < N; i++) { let m = 0; const e = Math.min(b.length, (i + 1) * step); for (let j = i * step; j < e; j += 4) { const a = Math.max(Math.abs(d0[j]), Math.abs(d1[j])); if (a > m) m = a; } pk[i] = m; }
+    const inf = { pk, dur: b.duration, auto: findTitleZone(b) }; this.peaks.set(id, inf); return inf;
+  },
+  zone(id) { const z = (S.settings.sigZones || {})[S.names.get(id) || id]; if (z === 'none') return null; return z || (this.info(id) || {}).auto || null; }
+};
+/* Dove la musica della sigla si abbassa (per dire il titolo): il tratto più lungo ≥ 1,2 s almeno 7 dB sotto il livello tipico,
+   escluse le code d'inizio e di fine. */
+function findTitleZone(b) {
+  const hop = Math.round(b.sampleRate * 0.1), n = Math.floor(b.length / hop); if (n < 30) return null;
+  const d0 = b.getChannelData(0), d1 = b.numberOfChannels > 1 ? b.getChannelData(1) : d0, lv = new Float32Array(n);
+  for (let i = 0; i < n; i++) { let s2 = 0; for (let j = i * hop; j < (i + 1) * hop; j += 2) s2 += (d0[j] * d0[j] + d1[j] * d1[j]) / 2; lv[i] = 10 * Math.log10(s2 / (hop / 2) + 1e-10); }
+  const sm = lv.map((_, i) => { let a = 0, k = 0; for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) { a += lv[j]; k++; } return a / k; });
+  const ref = [...sm].sort((a, b2) => a - b2)[Math.floor(n * 0.75)], thr = ref - 7;
+  let best = null;
+  for (let i = 0; i < n;) {
+    if (sm[i] < thr && sm[i] > -75) { let j = i; while (j < n && sm[j] < thr && sm[j] > -75) j++;
+      const a = i * 0.1, z = j * 0.1; if (a > 0.8 && z < b.duration - 1.0 && z - a >= 1.2 && (!best || z - a > best.b - best.a)) best = { a, b: z };
+      i = j; } else i++;
+  }
+  return best;
+}
+/* Barra sotto l'anteprima VIDEO */
+const SIGBAR = {
+  shown: false, drag: null,
+  setup() {
+    const cv = $('sigWave'); if (!cv) return;
+    const xT = (e) => { const r = cv.getBoundingClientRect(), v = SIGV.voice(), inf = v && SIGV.info(v.fileId); return inf ? Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * inf.dur : null; };
+    cv.addEventListener('pointerdown', (e) => { if (isRec()) return; const t = xT(e); if (t == null) return; this.drag = { a: t, b: t, id: SIGV.voice().fileId }; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointermove', (e) => { if (!this.drag) return; const t = xT(e); if (t != null) this.drag.b = t; });
+    cv.addEventListener('pointerup', () => {
+      const d = this.drag; this.drag = null; if (!d) return; const a = Math.min(d.a, d.b), b = Math.max(d.a, d.b), key = S.names.get(d.id) || d.id;
+      S.settings.sigZones = S.settings.sigZones || {};
+      if (b - a < 0.3) return; S.settings.sigZones[key] = { a: +a.toFixed(2), b: +b.toFixed(2) }; saveSettings(); toast('Zona del titolo segnata: ' + a.toFixed(1) + '–' + b.toFixed(1) + ' s');
+    });
+    cv.addEventListener('dblclick', () => { const v = SIGV.voice(); if (!v || isRec()) return; const key = S.names.get(v.fileId) || v.fileId; if (S.settings.sigZones) delete S.settings.sigZones[key]; saveSettings(); toast('Zona del titolo: di nuovo automatica'); });
+  },
+  frame() {
+    const box = $('sigBar'); if (!box) return;
+    const v = SIGV.voice(), inf = v && v.dur > 3 && SIGV.info(v.fileId);
+    if (!inf) { if (this.shown) { box.hidden = true; this.shown = false; } return; }
+    if (!this.shown) { box.hidden = false; this.shown = true; }
+    const cv = $('sigWave'), W = Math.round(cv.clientWidth * devicePixelRatio), H = Math.round(cv.clientHeight * devicePixelRatio);
+    if (!W || !H) return; if (cv.width !== W) cv.width = W; if (cv.height !== H) cv.height = H;
+    const g = cv.getContext('2d'), pos = posOf(v, now()), z = this.drag ? { a: Math.min(this.drag.a, this.drag.b), b: Math.max(this.drag.a, this.drag.b) } : SIGV.zone(v.fileId), X = (t) => t / inf.dur * W;
+    g.clearRect(0, 0, W, H);
+    if (z) { g.fillStyle = 'rgba(255,196,0,.22)'; g.fillRect(X(z.a), 0, X(z.b) - X(z.a), H); }
+    const n = inf.pk.length, bw = W / n, col = (catOf(v.ch) || {}).color || '#9b7bff';
+    for (let i = 0; i < n; i++) { const h = Math.max(1, inf.pk[i] * H * 0.92), x = i * bw; g.fillStyle = x < X(pos) ? col : 'rgba(255,255,255,.35)'; g.fillRect(x, (H - h) / 2, Math.max(1, bw - 0.5), h); }
+    g.fillStyle = '#fff'; g.fillRect(X(pos) - devicePixelRatio, 0, 2 * devicePixelRatio, H);
+    let msg, cls = '';
+    const left = Math.max(0, v.dur - pos);
+    if (z && pos < z.a) { const k = z.a - pos; msg = k <= 3.5 ? `Titolo tra ${Math.ceil(k)}…` : `${catName(v.ch)} · titolo tra ${k.toFixed(0)} s`; cls = k <= 3.5 ? 'soon' : ''; }
+    else if (z && pos < z.b) { msg = `● PARLA ORA: titolo della puntata · ${(z.b - pos).toFixed(1)} s`; cls = 'now'; }
+    else msg = `${catName(v.ch)} · fine tra ${left.toFixed(0)} s`;
+    if (!isRec() && !z) msg += ' · trascina sulla forma d\'onda per segnare il titolo';
+    const m = $('sigMsg'); if (m.textContent !== msg) m.textContent = msg; if (m.className !== cls) m.className = cls;
+  }
+};
 const OUT = {
   cv: null, g: null, blur: null, bg: null, logo: null, sub: null,
   setup() {
@@ -1771,13 +1870,20 @@ const OUT = {
     const keyed = fg.key || fg.vbg || fg.seg, behind = keyed && ov.behind !== false && ov.bg !== 'none' && !CAM.edit;
     const r = this.region(), full = CAM.edit || ov.bg === 'none' || (r[0] < 0.002 && r[1] < 0.002 && r[2] > 0.998 && r[3] > 0.998);
     // Se non c'è niente da sovrapporre si mostra direttamente la webcam elaborata (più leggero)
-    const pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub;
+    const sv = SIGV.frameEl(), pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub && !sv;
     if (pass !== this.pass) { this.pass = pass; src.style.display = pass ? 'block' : 'none'; this.cv.style.display = pass ? 'none' : 'block'; }
     if (pass) { this.drew = false; return; }
-    const animOv = this.sub || (ov.bg === 'video' && this.bgv) || CAM.edit;
+    const animOv = this.sub || (ov.bg === 'video' && this.bgv) || CAM.edit || sv;
     if (!CAM.drew && !animOv && this.lastOv === JSON.stringify(ov) && this.lastR === r.join()) { this.drew = false; return; }
     this.lastOv = JSON.stringify(ov); this.lastR = r.join(); this.drew = true;
     if (ov.bg === 'video' && this.bgv && this.bgv.paused) this.bgv.play().catch(() => {});
+    if (sv && !(sv.readyState >= 2 && sv.videoWidth && !sv.seeking)) { if (!this.sigOn) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); this.sigOn = true; this.drew = true; } else this.drew = false; return; } // resta l'ultimo fotogramma
+    this.sigOn = !!sv;
+    if (sv) { // sigla video a tutto schermo (con bande nere se non è 16:9): finisce così anche nel video registrato
+      const iw = sv.videoWidth, ih = sv.videoHeight, k = Math.min(W / iw, H / ih);
+      g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      g.drawImage(sv, (W - iw * k) / 2, (H - ih * k) / 2, iw * k, ih * k); return;
+    }
     if (behind) { this.drawBg(g, W, H, src, r); g.drawImage(src, 0, 0, W, H); }
     else if (full) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.drawImage(src, 0, 0, W, H); }
     else {
@@ -2386,11 +2492,11 @@ const DECKUI = {
       el.innerHTML = `<h2><span class="cn"></span> <span class="sp"></span><span class="tag"></span><span class="kbd" data-act="${c.id}"></span>${c === fl ? '<span class="kbd">1–9</span>' : ''}</h2>
         ${multi ? '<ul class="list"></ul>' : '<div class="fname"></div>'}
         <div class="prog"><i></i></div>
-        <div class="row">${c.type === 'single' ? '<button data-a="load" title="Scegli il file">📂 Scegli</button><button data-a="play" class="main-act">▶ PLAY</button><button data-a="stop" title="Ferma">■</button>'
+        <div class="row">${c.type === 'single' ? '<button data-a="load" title="Scegli il file: audio, oppure un video (mp4/webm) che va a tutto schermo nel video registrato">📂 Scegli</button><button data-a="play" class="main-act">▶ PLAY</button><button data-a="stop" title="Ferma">■</button>'
           : c.type === 'loop' ? '<button data-a="load" title="Aggiungi brani">＋ Brani</button><button data-a="prev" title="Brano precedente">⏮</button><button data-a="play" class="main-act">⏯ PLAY / PAUSA</button><button data-a="next" title="Brano successivo">⏭</button>'
           : '<button data-a="load" title="Aggiungi">＋ Aggiungi</button><button data-a="prev" title="Sposta il prossimo indietro">⏮</button><button data-a="play" class="main-act">▶ LANCIA</button><button data-a="stop" title="Ferma">■</button>'}</div>
         ${note ? `<p class="note">${note}</p>` : ''}
-        <input type="file" id="${fid}" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac" ${multi ? 'multiple' : ''} hidden>`;
+        <input type="file" id="${fid}" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac${multi ? '' : ',video/mp4,video/webm,.mp4,.m4v,.webm,.mov'}" ${multi ? 'multiple' : ''} hidden>`;
       el.querySelector('.cn').textContent = c.name.toUpperCase();
       if (mixer && mixer.parentElement === host) host.insertBefore(el, mixer); else host.append(el);
       const q = (a) => el.querySelector(`[data-a="${a}"]`), inp = el.querySelector('input[type=file]');
@@ -2638,7 +2744,7 @@ function loop(t) {
     const prog = (ch, el) => { const v = E.voices[ch], w = v ? Math.min(100, posOf(v, now()) / v.dur * 100).toFixed(1) + '%' : '0%'; if (el.dataset.w !== w) { el.style.width = w; el.dataset.w = w; } };
     if (meterTick) for (const id in DECKUI.cards) prog(id, DECKUI.cards[id].prog);
     TP.frame(t || performance.now());
-    CAM.render(t || performance.now()); OUT.render(t || performance.now());
+    CAM.render(t || performance.now()); OUT.render(t || performance.now()); SIGBAR.frame();
     const tn = performance.now(); if (!FPS.t) FPS.t = tn;
     if (tn - FPS.t >= 1000) { const sec = (tn - FPS.t) / 1000; const cf = Math.round(CAM.camFrames / sec), ef = Math.round((V.encFrames || 0) / sec); CAM.camFrames = 0; V.encFrames = 0; FPS.t = tn;
       const el = $('vFps'); if (el) el.textContent = CAM.ok ? `Webcam: ${cf} fps` + (V.active && R.state === 'rec' ? ` · video registrato: ${ef} fps` : '') + (cf && cf < 20 ? ' — la webcam è lenta: di solito è poca luce' : '') : '—'; }
@@ -3970,7 +4076,7 @@ async function boot() {
       $('boot').hidden = true; $('app').hidden = false;
       CAM.setup(); OUT.setup(); await OUT.loadImages(); await CAM.loadScene();
       try { await ensureSubFx(); rebuildActions(); } catch (e) { console.warn('suono iscriviti', e); }
-      wire(); renderAll(); TP.render(); requestAnimationFrame(loop);
+      wire(); SIGBAR.setup(); renderAll(); TP.render(); requestAnimationFrame(loop);
       if (S.settings.camId !== 'none') await CAM.init(S.settings.camId); else CAM.chosen = 'none';
       await DEV.open(true);
       await preloadDeck(); await recoverSessions(); SYNC.startupCheck();
