@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.4.1 — 19/11/2026
+- I segnali in testa al testo partono sempre col via della registrazione: la puntata si apre sulla sigla dal primo fotogramma.
+- Sigla video sempre pronta al primo fotogramma.
+- Dissolvenze sigla ↔ webcam (0,7 s in uscita, 0,5 s in entrata a metà puntata).
+
 ## V4.4.0 — 19/11/2026
 - Sigla video: nei riquadri «un file alla volta» si può scegliere un video (mp4/webm); va a tutto schermo nell'anteprima e nel video registrato, a tempo con l'audio.
 - Forma d'onda della sigla sotto l'anteprima: cursore, zona del titolo trovata da sola (dove la musica si abbassa), conto alla rovescia e «PARLA ORA».

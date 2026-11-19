@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.4.0' };
+const APP = { name: 'GPverse OnAir', version: '4.4.1' };
 
 const CHANGELOG = [
+  { v: '4.4.1', date: '19/11/2026', title: 'Sigla video più pulita', items: [
+    'Un segnale in testa al testo (es. [SIGLA] prima del titolo) parte sempre con la registrazione, anche se è un po\' sotto la riga di lettura: la puntata si apre sulla sigla dal primo fotogramma.',
+    'La sigla video resta pronta al primo fotogramma: niente attimi di nero o di webcam quando parte.',
+    'Dissolvenze: a fine sigla l\'ultimo fotogramma sfuma nella webcam; se la lanci a metà puntata, la webcam sfuma nella sigla.' ] },
   { v: '4.4.0', date: '19/11/2026', title: 'Sigla video', items: [
     'Nei riquadri «un file alla volta» (come SIGLA) puoi scegliere anche un video mp4 o webm: mentre suona va a tutto schermo nell\'anteprima e nel video registrato, a tempo con l\'audio; poi torna la webcam.',
     'Sotto l\'anteprima VIDEO compare la forma d\'onda della sigla con il cursore, la zona gialla del titolo (dove la musica si abbassa, trovata da sola) e il conto alla rovescia «Titolo tra 3… 2… 1…» → «PARLA ORA».',
@@ -1742,14 +1746,15 @@ const SIGV = {
     if (this.els.has(id)) return this.els.get(id);
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = URL.createObjectURL(blob); this.els.set(id, v); return v;
   },
+  rewind(el) { el.pause(); el.playbackRate = 1; try { el.currentTime = 0; } catch (e) {} }, // pronta al primo fotogramma per la prossima volta
   duration(id) { const v = this.els.get(id); return new Promise(res => { if (!v) return res(1); if (v.readyState >= 1) return res(v.duration || 1); v.addEventListener('loadedmetadata', () => res(v.duration || 1), { once: true }); v.addEventListener('error', () => res(1), { once: true }); }); },
   /* voce «un file alla volta» in corso (escluse quelle di sistema) */
   voice() { for (const c of userCats()) if (c.type === 'single') { const v = E.voices[c.id]; if (v) return v; } return null; },
   /* aggiorna il video in base alla voce in corso; restituisce l'elemento da disegnare o null */
   frameEl() {
     const v = this.voice(), el = v && this.els.get(v.fileId);
-    if (!el) { if (this.cur) { this.cur.el.pause(); this.cur = null; } return null; }
-    if (!this.cur || this.cur.v !== v) { if (this.cur) this.cur.el.pause(); this.cur = { v, el }; try { el.currentTime = posOf(v, now()); } catch (e) {} el.play().catch(() => {}); }
+    if (!el) { if (this.cur) { this.rewind(this.cur.el); this.cur = null; } return null; }
+    if (!this.cur || this.cur.v !== v) { if (this.cur) this.rewind(this.cur.el); this.cur = { v, el }; const p0 = posOf(v, now()); if (Math.abs(el.currentTime - p0) > 0.3) { try { el.currentTime = p0; } catch (e) {} } el.play().catch(() => {}); }
     // a tempo con l'audio: piccoli scarti si recuperano accelerando o rallentando appena, quelli grandi con un salto
     const want = posOf(v, now()), diff = want - el.currentTime;
     if (Math.abs(diff) > 0.6 && !el.seeking) { try { el.currentTime = want; } catch (e) {} el.playbackRate = 1; }
@@ -1870,19 +1875,28 @@ const OUT = {
     const keyed = fg.key || fg.vbg || fg.seg, behind = keyed && ov.behind !== false && ov.bg !== 'none' && !CAM.edit;
     const r = this.region(), full = CAM.edit || ov.bg === 'none' || (r[0] < 0.002 && r[1] < 0.002 && r[2] > 0.998 && r[3] > 0.998);
     // Se non c'è niente da sovrapporre si mostra direttamente la webcam elaborata (più leggero)
-    const sv = SIGV.frameEl(), pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub && !sv;
+    const sv = SIGV.frameEl(), pass = full && !keyed && !(ov.logoOn && this.logo) && !this.sub && !sv && !this.sigOn && this.fadeT == null;
+    const wasPass = this.pass;
     if (pass !== this.pass) { this.pass = pass; src.style.display = pass ? 'block' : 'none'; this.cv.style.display = pass ? 'none' : 'block'; }
     if (pass) { this.drew = false; return; }
-    const animOv = this.sub || (ov.bg === 'video' && this.bgv) || CAM.edit || sv;
+    // fine sigla: l'ultimo fotogramma si dissolve nella webcam in 0,7 s
+    if (!sv && this.sigOn) { this.sigOn = false; if (!this.snap) { this.snap = document.createElement('canvas'); } this.snap.width = W; this.snap.height = H; this.snap.getContext('2d').drawImage(this.cv, 0, 0); this.fadeT = t; }
+    const fadeK = this.fadeT != null ? 1 - (t - this.fadeT) / 700 : 0; if (fadeK <= 0) this.fadeT = null;
+    const animOv = this.sub || (ov.bg === 'video' && this.bgv) || CAM.edit || sv || fadeK > 0;
     if (!CAM.drew && !animOv && this.lastOv === JSON.stringify(ov) && this.lastR === r.join()) { this.drew = false; return; }
     this.lastOv = JSON.stringify(ov); this.lastR = r.join(); this.drew = true;
     if (ov.bg === 'video' && this.bgv && this.bgv.paused) this.bgv.play().catch(() => {});
     if (sv && !(sv.readyState >= 2 && sv.videoWidth && !sv.seeking)) { if (!this.sigOn) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); this.sigOn = true; this.drew = true; } else this.drew = false; return; } // resta l'ultimo fotogramma
-    this.sigOn = !!sv;
+    if (sv && !this.sigOn) { // inizio sigla: la webcam si dissolve nella sigla (0,5 s), tranne quando la sigla apre la registrazione
+      this.sigOn = true; const atRecStart = R.state === 'rec' && tlAt(now()) < 0.4;
+      if (!atRecStart) { if (!this.snap) this.snap = document.createElement('canvas'); this.snap.width = W; this.snap.height = H; this.snap.getContext('2d').drawImage(wasPass ? src : this.cv, 0, 0, W, H); this.fadeInT = t; }
+    }
     if (sv) { // sigla video a tutto schermo (con bande nere se non è 16:9): finisce così anche nel video registrato
       const iw = sv.videoWidth, ih = sv.videoHeight, k = Math.min(W / iw, H / ih);
       g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-      g.drawImage(sv, (W - iw * k) / 2, (H - ih * k) / 2, iw * k, ih * k); return;
+      g.drawImage(sv, (W - iw * k) / 2, (H - ih * k) / 2, iw * k, ih * k);
+      if (this.fadeInT != null) { const k2 = 1 - (t - this.fadeInT) / 500; if (k2 > 0) { g.globalAlpha = k2 * k2 * (3 - 2 * k2); g.drawImage(this.snap, 0, 0, W, H); g.globalAlpha = 1; } else this.fadeInT = null; }
+      return;
     }
     if (behind) { this.drawBg(g, W, H, src, r); g.drawImage(src, 0, 0, W, H); }
     else if (full) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); g.drawImage(src, 0, 0, W, H); }
@@ -1898,6 +1912,7 @@ const OUT = {
       g.globalAlpha = ov.logoOp; g.drawImage(this.logo, x, y, lw, lh); g.globalAlpha = 1;
     }
     if (this.sub) SUB.draw(g, W, H, (t - this.sub) / 1000) || (this.sub = null);
+    if (fadeK > 0 && this.snap) { g.globalAlpha = fadeK * fadeK * (3 - 2 * fadeK); g.drawImage(this.snap, 0, 0, W, H); g.globalAlpha = 1; }
   }
 };
 /* Suono di «Iscriviti»: fruscio d'entrata, clic sul pulsante (a 2,25 s) e campanella (a 2,7 s), a tempo con l'animazione */
@@ -2421,7 +2436,12 @@ const TP = {
   onRecStart() {
     this.syncFired();
     // segnali appena sopra la riga di lettura (es. [SIGLA] prima del titolo): sono «adesso», quindi partono con la registrazione
-    if (this.auto) { const ly = this.lineY(), lh = this.size * 1.45; for (const c of this.cues) { const y = this.cueY(c); if (y <= ly + lh * 0.6 && y > ly - lh * 1.9) { c.dataset.fired = '1'; if (y > ly) c.dataset.pre = '1'; this.fire(c); } } }
+    if (this.auto) {
+      const ly = this.lineY(), lh = this.size * 1.45, head = new Set();
+      // i segnali in testa al testo (nessuna parola prima, es. [SIGLA] in apertura) partono sempre col via, ovunque siano rispetto alla riga
+      if (this.el) for (const el of this.el.querySelectorAll('.w, .cue')) { if (!el.classList.contains('cue')) break; head.add(el); }
+      for (const c of this.cues) { const y = this.cueY(c); if ((head.has(c) && y > ly - lh * 1.9) || (y <= ly + lh * 0.6 && y > ly - lh * 1.9)) { c.dataset.fired = '1'; if (y > ly) c.dataset.pre = '1'; this.fire(c); } }
+    }
     const fs = firstSingle(), go = this.startMode === 'rec' || (this.startMode === 'intro' && !(fs && dk(fs.id)));
     if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); }
     this.layout();
