@@ -3,9 +3,11 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.4.2' };
+const APP = { name: 'GPverse OnAir', version: '4.4.3' };
 
 const CHANGELOG = [
+  { v: '4.4.3', date: '21/11/2026', title: 'P non ferma più il testo appena partito', items: [
+    'Con «Segue le parole» il testo parte da solo col via: se premi P nei primi secondi (come serviva prima per avviarlo) non si ferma più e resta allineato alla voce. Più avanti P mette in pausa come sempre.' ] },
   { v: '4.4.2', date: '21/11/2026', title: 'La sigla parte dalle parole che leggi', items: [
     '«Parte dopo la sigla» con del testo prima di [SIGLA]: il teleprompter parte subito e ascolta, così la sigla parte da sola quando finisci la frase (prima il testo restava fermo e nessuno ascoltava).',
     'Con «Segue le parole» il riconoscimento ascolta anche mentre suona la sigla: il titolo detto sulla sigla fa avanzare il testo.',
@@ -2364,7 +2366,10 @@ const TP = {
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
   syncFired() { const ly = this.lineY(); for (const c of this.cues) c.dataset.fired = (this.cueY(c) <= ly || c.dataset.pre === '1') ? '1' : '0'; },
   setTop(y) { this.view.scrollTop = y; this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); VF.resync(); },
-  toggle() { if (this.voiceWait && this.running) { this.voiceWait = null; this.lastT = performance.now(); this.layout(); return; } this.running = !this.running; this.voiceWait = null; this.lastT = performance.now(); this.layout(); },
+  toggle() {
+    // «Segue le parole» parte da solo col via: la P premuta per abitudine nei primi secondi non lo ferma (prima serviva per avviarlo)
+    if (this.mode === 'follow' && this.running && this.autoRunAt && performance.now() - this.autoRunAt < 15000) { toast('Il testo segue già la tua voce: non serve premere P'); return; }
+    if (this.voiceWait && this.running) { this.voiceWait = null; this.lastT = performance.now(); this.layout(); return; } this.running = !this.running; this.voiceWait = null; this.lastT = performance.now(); this.layout(); },
   nudge(dir) { if (!this.view) return; this.push = (this.push || 0) + dir * this.size * 1.45 * 0.6; },
   frame(t) {
     const dt = Math.min(0.1, (t - (this.lastT || t)) / 1000); this.lastT = t;
@@ -2450,7 +2455,7 @@ const TP = {
     const fs = firstSingle(), sigLater = fs && this.cues.some(c => c.dataset.cue === cueWord(fs) && c.dataset.done !== '1' && !E.voices[fs.id]);
     // con «Segue le parole» il testo si muove solo quando parli: ascolta da subito, anche durante la sigla (il titolo detto sulla sigla fa scorrere il testo)
     const go = this.startMode === 'rec' || (this.startMode === 'intro' && (this.mode === 'follow' || !(fs && dk(fs.id)) || (sigLater && !singlePlaying())));
-    if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); }
+    this.autoRunAt = 0; if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.autoRunAt = performance.now(); }
     this.layout();
   },
   onSingleEnd(id) {

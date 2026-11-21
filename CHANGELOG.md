@@ -7,6 +7,9 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.4.3 — 21/11/2026
+- «Segue le parole»: la P premuta nei primi 15 s dopo il via non ferma il testo partito da solo (restava fermo e poi ripartiva disallineato).
+
 ## V4.4.2 — 21/11/2026
 - «Parte dopo la sigla» con testo prima di [SIGLA]: il teleprompter parte e ascolta subito, la sigla parte quando finisci la frase.
 - «Segue le parole» ascolta anche durante la sigla (il titolo fa avanzare il testo).
