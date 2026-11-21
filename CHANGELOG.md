@@ -7,6 +7,10 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.4.4 — 21/11/2026
+- Riconoscimento vocale: in caso di errore riprova da solo; se non va, ripiego solo per quella volta (l'impostazione resta «Segue le parole»), con avviso rosso cliccabile per riprovare.
+- «Scorre quando parlo»: ignora i colpi sul tavolo (controllo del tono della voce e del calo improvviso di livello).
+
 ## V4.4.3 — 21/11/2026
 - «Segue le parole»: la P premuta nei primi 15 s dopo il via non ferma il testo partito da solo (restava fermo e poi ripartiva disallineato).
 

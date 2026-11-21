@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.4.3' };
+const APP = { name: 'GPverse OnAir', version: '4.4.4' };
 
 const CHANGELOG = [
+  { v: '4.4.4', date: '21/11/2026', title: '«Segue le parole» non si perde più', items: [
+    'Se il riconoscimento vocale di Chrome dà un errore, riprova da solo (fino a 4 volte, anche col microfono predefinito) invece di arrendersi subito.',
+    'Se proprio non va, il testo scorre quando parli SOLO per quella volta: l\'impostazione resta «Segue le parole» e un avviso rosso dice il motivo (clic per riprovare). Prima passava per sempre a «Scorre quando parlo».',
+    '«Scorre quando parlo» non si fa più ingannare da colpi sul tavolo: la voce deve avere un tono e durare almeno 150 ms senza «crollare» come un colpo.' ] },
   { v: '4.4.3', date: '21/11/2026', title: 'P non ferma più il testo appena partito', items: [
     'Con «Segue le parole» il testo parte da solo col via: se premi P nei primi secondi (come serviva prima per avviarlo) non si ferma più e resta allineato alla voce. Più avanti P mette in pausa come sempre.' ] },
   { v: '4.4.2', date: '21/11/2026', title: 'La sigla parte dalle parole che leggi', items: [
@@ -2223,7 +2227,7 @@ async function exportVideo(sess, opts, onProg) {
 const normW = (w) => String(w).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 /* «Quando parlo»: il testo scorre solo mentre c'è voce nel microfono */
 const VAD = {
-  floor: -60, last: 0, buf: null, fb: null, t: 0, run: 0,
+  floor: -60, last: 0, buf: null, fb: null, t: 0, run: 0, minRun: 5, pthr: 0.4, hist: [],
   speaking(t) {
     if (!E.micAn) return true;
     if (t - this.t > 30) {
@@ -2235,11 +2239,24 @@ const VAD = {
       const hz = E.ctx.sampleRate / an.fftSize; let lo = 0, hi = 0;
       for (let i = Math.round(100 / hz); i < Math.round(1000 / hz); i++) lo += Math.pow(10, f[i] / 10);
       for (let i = Math.round(2000 / hz); i < Math.round(8000 / hz); i++) hi += Math.pow(10, f[i] / 10);
-      const voiced = db > Math.max(this.floor + 12, -52) && lo > hi * 1.5;
+      const loud = db > Math.max(this.floor + 12, -52) && lo > hi * 1.5;
+      // la voce vibra in modo regolare (tono tra 75 e 400 Hz); un colpo sul tavolo o un clic no
+      // un colpo sul tavolo è un picco che crolla subito (oltre 10 dB in 60 ms); la voce resta su un livello per tutta la sillaba
+      const h = this.hist; h.push(db); if (h.length > 3) h.shift(); const crash = h.length === 3 && Math.max(h[0], h[1]) - db > 10;
+      const voiced = loud && !crash && this.pitched(b, E.ctx.sampleRate);
       this.run = voiced ? this.run + 1 : 0;
-      if (this.run >= 3) this.last = t;   // almeno ~90 ms di voce di fila
+      if (this.run >= this.minRun) this.last = t;   // almeno ~150 ms di voce di fila: i colpi durano meno
     }
-    return t - this.last < 450;
+    return t - this.last < 600;
+  },
+  /* autocorrelazione normalizzata su segnale decimato (~12 kHz): picco alto = suono con un tono (voce) */
+  pitched(b, sr) {
+    const D = Math.max(1, Math.round(sr / 12000)), n = Math.floor(b.length / D), x = this.dx && this.dx.length === n ? this.dx : (this.dx = new Float32Array(n));
+    let m = 0; for (let i = 0; i < n; i++) { let a = 0; for (let k = 0; k < D; k++) a += b[i * D + k]; x[i] = a / D; m += x[i]; } m /= n;
+    let e0 = 0; for (let i = 0; i < n; i++) { x[i] -= m; e0 += x[i] * x[i]; } if (e0 < 1e-9) return false;
+    const fs = sr / D, l0 = Math.floor(fs / 400), l1 = Math.min(n - 32, Math.ceil(fs / 75)); let best = 0;
+    for (let L = l0; L <= l1; L++) { let c = 0, e1 = 0, e2 = 0; for (let i = 0; i + L < n; i++) { c += x[i] * x[i + L]; e1 += x[i] * x[i]; e2 += x[i + L] * x[i + L]; } const r = c / Math.sqrt(e1 * e2 + 1e-12); if (r > best) best = r; }
+    return best > this.pthr;
   }
 };
 /* «Segue le parole»: riconoscimento vocale del browser; il testo va avanti man mano che leggi */
@@ -2267,13 +2284,22 @@ const VF = {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition, r = new SR();
     r.lang = 'it-IT'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
     r.onresult = (e) => { let txt = '', fin = true; for (let i = e.resultIndex; i < e.results.length; i++) { txt += ' ' + e.results[i][0].transcript; if (!e.results[i].isFinal) fin = false; } this.hear(txt, fin); };
-    r.onerror = (e) => { if (['not-allowed', 'service-not-allowed', 'network', 'language-not-supported', 'audio-capture'].includes(e.error)) this.fail(e.error === 'network' ? 'serve la connessione a internet' : e.error); };
-    r.onend = () => { if (this.on) setTimeout(() => { if (this.on) this.go(); }, 150); };
-    this.rec = r; this.on = true; this.resync(); this.go(); TP.layout();
+    r.onerror = (e) => {
+      if (!['not-allowed', 'service-not-allowed', 'network', 'language-not-supported', 'audio-capture'].includes(e.error)) return; // no-speech / aborted: riparte da solo
+      const why = { network: 'manca la connessione a internet', 'not-allowed': 'Chrome non dà il permesso al microfono per il riconoscimento', 'service-not-allowed': 'servizio di riconoscimento bloccato', 'audio-capture': 'il microfono non arriva al riconoscimento', 'language-not-supported': 'italiano non disponibile' }[e.error];
+      // un errore passeggero non deve cambiare modo: riprova fino a 4 volte, poi ripiega (solo per ora)
+      this.tries = (this.tries || 0) + 1; console.warn('riconoscimento vocale:', e.error, 'tentativo', this.tries);
+      if (e.error !== 'language-not-supported' && this.tries <= 4) { this.retry = true; return; }
+      this.fail(why);
+    };
+    r.onend = () => { if (this.on) setTimeout(() => { if (this.on) this.go(this.retry); this.retry = false; }, this.retry ? 1500 : 150); };
+    this.rec = r; this.on = true; this.tries = 0; this.retry = false; this.resync(); this.go(); TP.layout();
   },
-  go() { const tr = E.micStream && E.micStream.getAudioTracks()[0]; try { tr ? this.rec.start(tr) : this.rec.start(); } catch (e) { try { this.rec.start(); } catch (e2) {} } },
+  go(plain) { const tr = !plain && E.micStream && E.micStream.getAudioTracks()[0]; try { tr ? this.rec.start(tr) : this.rec.start(); } catch (e) { try { this.rec.start(); } catch (e2) {} } }, // dopo un errore riprova col microfono predefinito
   stop() { if (!this.on) return; this.on = false; try { this.rec.abort(); } catch (e) {} this.rec = null; TP.layout && TP.el && TP.layout(); },
-  fail(why) { this.err = why; this.stop(); TP.mode = 'voice'; TP.save(); TP.layout(); toast('«Segue le parole» non disponibile (' + why + '): passo a «Quando parlo»'); },
+  // ripiego SOLO per questa volta: l'impostazione resta «Segue le parole» e un avviso rosso ti dice perché (clic = riprova)
+  fail(why) { this.err = why; this.stop(); TP.mode = 'voice'; TP.wantFollow = true; TP.layout(); toast('«Segue le parole» non funziona ora (' + why + '): per questa volta il testo scorre quando parli', 7000); },
+  retryNow() { this.err = null; this.tries = 0; TP.wantFollow = false; TP.mode = 'follow'; TP.layout(); },
   hear(txt, fin) {
     const said = txt.split(/\s+/).map(normW).filter(Boolean), tail = said.slice(-6); if (!tail.length || !this.words.length) return;
     this.lastHeard = performance.now();
@@ -2306,6 +2332,7 @@ const VF = {
   /* Dizione: percentuale di parole capite nelle ultime ~40 lette */
   score() {
     const el = $('ptDiction'); if (!el) return;
+    if (TP.wantFollow && this.err) { el.hidden = false; el.textContent = '⚠ Non sento le parole: ' + this.err + ' · clic per riprovare'; el.className = 'grp dic bad'; el.title = 'Il riconoscimento vocale di Chrome si è interrotto: per ora il testo scorre quando parli. Clic per riprovare'; return; }
     const show = TP.mode === 'follow' && this.on; el.hidden = !show; if (!show) return;
     const a = Math.max(0, this.pos - 40); let tot = 0, ok = 0;
     for (let k = a; k < this.pos; k++) { if (this.words[k].n.length <= 2) continue; tot++; if (!this.words[k].el.classList.contains('miss')) ok++; }
@@ -2328,7 +2355,7 @@ const TP = {
     const st = await DB.get('state', 'prompter');
     if (st) for (const k of ['text', 'speed', 'size', 'mirror', 'auto', 'visible', 'startMode', 'mode']) if (k in st) this[k] = st[k];
   },
-  save() { const { text, speed, size, mirror, auto, visible, startMode, mode } = this; DB.put('state', 'prompter', { text, speed, size, mirror, auto, visible, startMode, mode }); SYNC.changed(); },
+  save() { const { text, speed, size, mirror, auto, visible, startMode } = this, mode = this.wantFollow ? 'follow' : this.mode; DB.put('state', 'prompter', { text, speed, size, mirror, auto, visible, startMode, mode }); SYNC.changed(); },
   render() {
     const esc = (t) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const paras = this.text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
@@ -2480,7 +2507,7 @@ const TP = {
 
 /* ------------------------------------------------------------------ UI */
 let toastT = null;
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3200); }
+function toast(msg, ms = 3200) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, ms); }
 const nameOf = (id) => S.names.get(id) || 'File mancante';
 
 function renderStatus() {
@@ -3823,7 +3850,8 @@ function wire() {
   window.addEventListener('resize', () => { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); });
   $('ptRun').addEventListener('click', () => TP.toggle());
   $('ptStart').addEventListener('change', (e) => { TP.startMode = e.target.value; TP.save(); });
-  $('ptMode').addEventListener('change', (e) => { TP.mode = e.target.value; TP.save(); TP.layout(); if (TP.mode === 'follow' && !VF.supported()) VF.fail('il browser non ha il riconoscimento vocale'); });
+  $('ptDiction').addEventListener('click', () => { if (TP.wantFollow) VF.retryNow(); });
+  $('ptMode').addEventListener('change', (e) => { TP.wantFollow = false; VF.err = null; VF.tries = 0; TP.mode = e.target.value; TP.save(); TP.layout(); if (TP.mode === 'follow' && !VF.supported()) VF.fail('il browser non ha il riconoscimento vocale'); });
   $('helpBtn').addEventListener('click', () => HELP.toggle());
   $('helpPip').addEventListener('click', async () => { if (!(await HELP.openPip())) toast('Il browser ha bloccato la finestra: consenti i popup per questo sito'); else $('helpModal').hidden = true; });
   $('setHelpRec').value = S.settings.helpOnRec === false ? '0' : '1';
