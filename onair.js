@@ -3,9 +3,13 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.4.1' };
+const APP = { name: 'GPverse OnAir', version: '4.4.2' };
 
 const CHANGELOG = [
+  { v: '4.4.2', date: '21/11/2026', title: 'La sigla parte dalle parole che leggi', items: [
+    '«Parte dopo la sigla» con del testo prima di [SIGLA]: il teleprompter parte subito e ascolta, così la sigla parte da sola quando finisci la frase (prima il testo restava fermo e nessuno ascoltava).',
+    'Con «Segue le parole» il riconoscimento ascolta anche mentre suona la sigla: il titolo detto sulla sigla fa avanzare il testo.',
+    'Se il riconoscimento perde le ultime una o due parole prima di un segnale, dopo una breve pausa il segnale parte lo stesso.' ] },
   { v: '4.4.1', date: '19/11/2026', title: 'Sigla video più pulita', items: [
     'Un segnale in testa al testo (es. [SIGLA] prima del titolo) parte sempre con la registrazione, anche se è un po\' sotto la riga di lettura: la puntata si apre sulla sigla dal primo fotogramma.',
     'La sigla video resta pronta al primo fotogramma: niente attimi di nero o di webcam quando parte.',
@@ -2404,7 +2408,7 @@ const TP = {
     const ly = this.lineY();
     for (const c of this.cues) {
       if (c.dataset.fired === '1' || c.dataset.wi == null) continue;
-      const wi = +c.dataset.wi, need = silent ? wi - 1 : wi;
+      const wi = +c.dataset.wi, need = silent ? Math.max(1, wi - 2) : wi; // in pausa bastano tutte le parole tranne le ultime 2
       if (VF.pos >= need && VF.pos <= wi + 2) {
         c.dataset.fired = '1'; if (this.cueY(c) > ly) c.dataset.pre = '1'; this.fire(c);
         // il testo si porta subito dopo l'etichetta: sulla riga di lettura c'è la frase che viene dopo
@@ -2442,7 +2446,10 @@ const TP = {
       if (this.el) for (const el of this.el.querySelectorAll('.w, .cue')) { if (!el.classList.contains('cue')) break; head.add(el); }
       for (const c of this.cues) { const y = this.cueY(c); if ((head.has(c) && y > ly - lh * 1.9) || (y <= ly + lh * 0.6 && y > ly - lh * 1.9)) { c.dataset.fired = '1'; if (y > ly) c.dataset.pre = '1'; this.fire(c); } }
     }
-    const fs = firstSingle(), go = this.startMode === 'rec' || (this.startMode === 'intro' && !(fs && dk(fs.id)));
+    // «Parte dopo la sigla»: se la sigla apre il testo aspetta che finisca; se prima di [SIGLA] c'è del testo da leggere, parte subito (e ascolta)
+    const fs = firstSingle(), sigLater = fs && this.cues.some(c => c.dataset.cue === cueWord(fs) && c.dataset.done !== '1' && !E.voices[fs.id]);
+    // con «Segue le parole» il testo si muove solo quando parli: ascolta da subito, anche durante la sigla (il titolo detto sulla sigla fa scorrere il testo)
+    const go = this.startMode === 'rec' || (this.startMode === 'intro' && (this.mode === 'follow' || !(fs && dk(fs.id)) || (sigLater && !singlePlaying())));
     if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); }
     this.layout();
   },
