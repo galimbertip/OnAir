@@ -3,9 +3,15 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.4.4' };
+const APP = { name: 'GPverse OnAir', version: '4.5.0' };
 
 const CHANGELOG = [
+  { v: '4.5.0', date: '21/11/2026', title: '«Segue le parole» affidabile e fluido', items: [
+    'Niente più salti in avanti: le parole corte e comuni («e», «di», «un», «la»…) contano poco; per spostarsi lontano servono almeno 3 parole vere che combaciano, confermate dal risultato dopo. In una prova con riconoscimento «sporco» la versione prima saltava fino a 121 parole avanti, ora al massimo 3.',
+    'Se il testo ripete parole già lette («macchina», «sviluppo»…), sceglie il punto credibile vicino a dove sei invece di restare fermo.',
+    'Se resta indietro o finisce nel punto sbagliato, si ritrova da solo quando continui a leggere (cerca anche 40 parole indietro).',
+    'Scorrimento fluido: il testo sale in proporzione a quanto della riga hai letto e, mentre parli, continua alla tua velocità tra un risultato di Chrome e l\'altro.',
+    'Rotella del mouse: se torni indietro a mano, il testo riparte da lì invece di tornare avanti da solo.' ] },
   { v: '4.4.4', date: '21/11/2026', title: '«Segue le parole» non si perde più', items: [
     'Se il riconoscimento vocale di Chrome dà un errore, riprova da solo (fino a 4 volte, anche col microfono predefinito) invece di arrendersi subito.',
     'Se proprio non va, il testo scorre quando parli SOLO per quella volta: l\'impostazione resta «Segue le parole» e un avviso rosso dice il motivo (clic per riprovare). Prima passava per sempre a «Scorre quando parlo».',
@@ -2224,6 +2230,7 @@ async function exportVideo(sess, opts, onProg) {
 
 /* ------------------------------------------------------------------ Teleprompter */
 /* Parole: minuscole, senza accenti né punteggiatura (per confrontare testo e voce riconosciuta) */
+const STOPW = new Set('il lo la le gli un una uno del della dei delle degli dello nel nella nei nelle negli sul sulla sui sulle con per tra fra che chi non come anche ma poi piu gia era sono stato stata hanno questo questa quello quella cosa cui dove quando perche ogni tutto tutti molto suo sua suoi loro nostro vostro mio tuo essere fare dopo prima sempre ancora solo'.split(' '));
 const normW = (w) => String(w).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 /* «Quando parlo»: il testo scorre solo mentre c'è voce nel microfono */
 const VAD = {
@@ -2272,7 +2279,7 @@ const VF = {
   resync() {
     if (!TP.view || !this.words.length) { this.pos = 0; this.target = null; return; }
     const y = TP.view.scrollTop + TP.lineY() - 2; let i = this.words.findIndex(w => w.el.offsetTop + w.el.offsetHeight > y); if (i < 0) i = this.words.length;
-    this.pos = i; this.target = null; this.mark(i); this.score();
+    this.pos = i; this.vpos = i; this.target = null; this.pendJump = null; this.mark(i); this.score();
   },
   mark(i) {
     const a = Math.min(this.readTo, i), b = Math.max(this.readTo, i);
@@ -2300,20 +2307,57 @@ const VF = {
   // ripiego SOLO per questa volta: l'impostazione resta «Segue le parole» e un avviso rosso ti dice perché (clic = riprova)
   fail(why) { this.err = why; this.stop(); TP.mode = 'voice'; TP.wantFollow = true; TP.layout(); toast('«Segue le parole» non funziona ora (' + why + '): per questa volta il testo scorre quando parli', 7000); },
   retryNow() { this.err = null; this.tries = 0; TP.wantFollow = false; TP.mode = 'follow'; TP.layout(); },
-  hear(txt, fin) {
-    const said = txt.split(/\s+/).map(normW).filter(Boolean), tail = said.slice(-6); if (!tail.length || !this.words.length) return;
-    this.lastHeard = performance.now();
+  /* Dove sei nel testo: le ultime parole dette (fino a 8) confrontate col testo vicino.
+     Le parole corte e comuni («e», «di», «un», «la»…) valgono poco: due di queste non bastano più a far saltare il testo.
+     Salti lunghi in avanti o indietro solo con almeno 3 parole «vere» che combaciano, e confermati da due risultati di fila. */
+  wt(n) { return n.length <= 3 || STOPW.has(n) ? 0.25 : n.length >= 7 ? 1.2 : 1; },
+  match(tail, j) {
     const W = this.words, L = tail.length, sim = (a, b) => a === b ? 1 : (a.length >= 4 && b.length >= 4 && a.slice(0, 4) === b.slice(0, 4)) ? 0.7 : 0;
-    let best = -1, bs = 0;
-    for (let j = Math.max(0, this.pos - 8); j < Math.min(W.length, this.pos + 80); j++) {
-      let sc = 0; for (let t = 0; t < L && j - t >= 0; t++) sc += sim(tail[L - 1 - t], W[j - t].n) * (t === 0 ? 1.2 : 1);
-      sc -= Math.abs(j - this.pos) * 0.008;
-      if (sc > bs) { bs = sc; best = j; }
+    let sc = 0, content = 0, k = j; // allineamento tollerante: una parola persa o in più non rompe il confronto
+    for (let t = L - 1; t >= 0 && k >= 0; t--) {
+      let s0 = sim(tail[t], W[k].n), kk = k;
+      if (!s0 && k - 1 >= 0 && sim(tail[t], W[k - 1].n)) { kk = k - 1; s0 = sim(tail[t], W[kk].n) * 0.8; }
+      if (s0) { const w = this.wt(W[kk].n); sc += s0 * w * (t === L - 1 ? 1.2 : 1); if (w >= 1) content++; k = kk - 1; }
+      else if (this.wt(tail[t]) < 1 || (t > 0 && sim(tail[t - 1], W[k].n))) { /* parola in più nel riconoscimento: la salto senza consumare il testo */ }
+      else k--;
     }
+    return { sc, content };
+  },
+  hear(txt, fin) {
+    const said = txt.split(/\s+/).map(normW).filter(Boolean), tail = said.slice(-8); if (!tail.length || !this.words.length) return;
+    this.lastHeard = performance.now();
+    const W = this.words, sim = (a, b) => a === b ? 1 : (a.length >= 4 && b.length >= 4 && a.slice(0, 4) === b.slice(0, 4)) ? 0.7 : 0;
+    const cand = [];
+    for (let j = Math.max(0, this.pos - 40); j < Math.min(W.length, this.pos + 80); j++) {
+      const m = this.match(tail, j), d = j + 1 - this.pos;
+      const sc = m.sc - (d > 3 ? (d - 3) * 0.03 : d < -1 ? (-1 - d) * 0.05 : 0); // vicino a dove sei = più probabile
+      if (sc > 0.2) cand.push({ j, sc, c: m.content });
+    }
+    cand.sort((a, b) => b.sc - a.sc);
+    // il testo ripete parole («macchina», «sviluppo»…): si prende il candidato migliore CREDIBILE, non solo il migliore
+    let best = -1, bs = 0, bc = 0, pend = null;
+    for (const k of cand.slice(0, 8)) {
+      const step = k.j + 1 - this.pos, near = step >= 0 && step <= 4 && W[k.j].n.length >= 5 && tail[tail.length - 1] === W[k.j].n;
+      let ok = near;
+      if (!ok && step >= -1 && step <= 6) ok = k.c >= 1 && k.sc >= 1.0;
+      else if (!ok && step > 6 && step <= 12) ok = k.c >= 2 && k.sc >= 2;
+      else if (!ok && step > 12 && step <= 15 && k.c >= 3 && k.sc >= 3) ok = true;  // hai saltato una frase corta
+      else if (!ok && (step > 12 || step < -3) && k.c >= 3) {      // salto lungo: confermato dal risultato dopo (o 5 parole vere)
+        const pj = this.pendJump; ok = k.c >= 5 || (k.c >= 4 && step > 0 && step <= 30) || (pj && Math.abs(pj.at - k.j) <= 6 && performance.now() - pj.t < 4000);
+        if (!ok && !pend) pend = { at: k.j, t: performance.now() };
+      }
+      if (ok) { best = k.j; bs = k.sc; bc = k.c; break; }
+    }
+    // rimasto indietro (il riconoscimento ha perso un pezzo): se due risultati di fila indicano lo stesso punto più avanti, ci va
+    const top = cand[0], lc = this.lastCand;
+    if (best < 0 && top && top.j + 1 - this.pos > 0 && top.j + 1 - this.pos <= 30 && top.c >= (top.j + 1 - this.pos > 12 ? 2 : 1)) {
+      if (lc && top.j - lc.at >= 1 && top.j - lc.at <= 6 && performance.now() - lc.t < 3000) { best = top.j; bs = top.sc; bc = top.c; }
+    }
+    this.lastCand = top && top.c >= 1 ? { at: top.j, t: performance.now() } : null;
+    if (pend) this.pendJump = pend;
     if (best < 0) return;
-    const near = best >= this.pos && best <= this.pos + 3 && W[best].n.length >= 5 && tail[L - 1] === W[best].n;
-    if (bs < 1.6 && !near) return;
-    if (best + 1 < this.pos - 2 && bs < 3) return;
+    const step = best + 1 - this.pos;
+    this.pendJump = null;
     const from = this.pos;
     // dizione: allinea le ultime parole dette al testo; quelle del testo che il riconoscimento non ha sentito sono «mangiate»
     { let i = said.length - 1, j = best; const stop = Math.max(0, Math.min(from, best) - 3), lim = Math.max(stop, best - 25);
@@ -2326,8 +2370,25 @@ const VF = {
       }
       // solo a frase chiusa (risultato definitivo) si segna una parola come mangiata
       if (fin) for (let k = Math.max(0, from - 1); k <= best; k++) if (!this.ok.has(k) && W[k].n.length > 2) W[k].el.classList.add('miss'); }
+    // velocità di lettura (parole al secondo), per far scorrere il testo con fluidità tra un risultato e l'altro
+    const now0 = performance.now();
+    if (this.lastHit && step > 0 && step <= 12) { const r = step / Math.max(0.15, (now0 - this.lastHit) / 1000); this.rate = this.rate ? this.rate * 0.75 + Math.min(5, r) * 0.25 : Math.min(4, r); }
+    if (step !== 0) this.lastHit = now0;
     this.pos = best + 1; this.target = W[best].el; this.mark(this.pos); this.score();
+    if (step < 0 || step > 12 || this.vpos == null) this.vpos = this.pos; else this.vpos = Math.max(this.pos - 0.3, Math.min(this.vpos, this.pos + 1.5));
     TP.cuesByWords();
+  },
+  /* fin dove può anticipare: 2 parole, ma non oltre la fine del paragrafo (o un segnale): lì aspetti, e il testo pure */
+  creepCap() {
+    const W = this.words, lh = TP.size * 1.45; let cap = this.pos + 2;
+    for (let k = Math.max(1, this.pos); k <= Math.min(W.length - 1, this.pos + 2); k++) if (W[k].el.offsetTop - W[k - 1].el.offsetTop > lh * 1.3) { cap = Math.min(cap, k - 0.05); break; }
+    return cap;
+  },
+  /* posizione verticale continua di una «parola frazionaria»: avanza dentro la riga in proporzione a quanto della riga hai letto */
+  yAt(v) {
+    const W = this.words; if (!W.length) return 0; const i = Math.max(0, Math.min(W.length - 1, Math.floor(v))), f = Math.max(0, Math.min(1, v - i));
+    const rw = Math.max(1, TP.el.clientWidth), y = (k) => { const el = W[Math.min(W.length - 1, k)].el; return el.offsetTop + Math.min(1, el.offsetLeft / rw) * el.offsetHeight; };
+    const a = y(i), b = i + 1 < W.length ? y(i + 1) : a + W[i].el.offsetHeight * 0.3; return a + (b - a) * f;
   },
   /* Dizione: percentuale di parole capite nelle ultime ~40 lette */
   score() {
@@ -2412,8 +2473,13 @@ const TP = {
     if (follow && this.running && !VF.on) VF.start(); else if (VF.on && (!follow || !this.running)) VF.stop();
     if (this.running && follow) {
       // segue le parole riconosciute: la parola appena letta va verso la riga di lettura
-      if (VF.target) { const want = Math.max(0, VF.target.offsetTop - this.lineY() + VF.target.offsetHeight * 0.2); const d = want - this.acc;
-        if (d > 0 || d < -this.view.clientHeight * 0.5) { this.acc += d * Math.min(1, dt * 3.5); this.view.scrollTop = this.acc; this.expect = this.view.scrollTop; } }
+      // fluido: tra un risultato e l'altro, mentre parli, va avanti alla tua velocità (al massimo 1,5 parole oltre l'ultima sentita)
+      if (VF.vpos != null && VF.words.length) {
+        const talking = VAD.speaking(t) || performance.now() - VF.lastHeard < 1300;
+        if (talking && VF.rate) VF.vpos = Math.min(VF.creepCap(), VF.vpos + VF.rate * 0.9 * dt);
+        if (VF.vpos < VF.pos - 0.3) VF.vpos = VF.pos - 0.3;
+        const want = Math.max(0, VF.yAt(VF.vpos) - this.lineY()), d = want - this.acc, lh = this.size * 1.45;
+        if (d > 0 || d < -lh * 1.2) { this.acc += d * Math.min(1, dt * (Math.abs(d) > lh * 3 ? 4 : 6)); this.view.scrollTop = this.acc; this.expect = this.view.scrollTop; } }
     } else if (this.running) {
       let talk = this.mode === 'voice' ? VAD.speaking(t) : true;
       if (this.voiceWait) { if (!talk) this.voiceWait.quiet = true; else if (this.voiceWait.quiet) { this.voiceWait = null; this.layout(); } if (this.voiceWait) talk = false; }
@@ -2444,7 +2510,7 @@ const TP = {
       if (VF.pos >= need && VF.pos <= wi + 2) {
         c.dataset.fired = '1'; if (this.cueY(c) > ly) c.dataset.pre = '1'; this.fire(c);
         // il testo si porta subito dopo l'etichetta: sulla riga di lettura c'è la frase che viene dopo
-        const nx = VF.words[wi]; if (nx) { VF.pos = wi; VF.target = nx.el; VF.mark(wi); }
+        const nx = VF.words[wi]; if (nx) { VF.pos = wi; VF.vpos = wi; VF.target = nx.el; VF.mark(wi); }
       }
     }
   },
@@ -2468,7 +2534,8 @@ const TP = {
       else if (['paused', 'stopped'].includes(loopSt(cat.id).status)) loopToggle(cat.id);
     }
   },
-  onScroll() { if (Math.abs(this.view.scrollTop - this.expect) > 2) { this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); } },
+  // scorrimento a mano (rotella, barra): «Segue le parole» riparte da lì invece di riportare il testo dov'era
+  onScroll() { if (Math.abs(this.view.scrollTop - this.expect) > 2) { this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); if (this.mode === 'follow') VF.resync(); } },
   onRecStart() {
     this.syncFired();
     // segnali appena sopra la riga di lettura (es. [SIGLA] prima del titolo): sono «adesso», quindi partono con la registrazione
