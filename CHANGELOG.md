@@ -7,6 +7,9 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.7.1 — 24/11/2026
+- Teleprompter in finestra staccata: scorre sempre, anche se nella regia era stato nascosto col pulsante «Teleprompter» (che ora porta in primo piano la finestra).
+
 ## V4.7.0 — 24/11/2026
 - Controllo pronuncia dal vivo in «Segue le parole»: parola sentita evidenziata, capite in verde, non capite in rosso (anche quelle saltate a metà frase), indicatore chiarezza + parole al minuto, avvisi RALLENTA / SCANDISCI.
 - Resoconto della pronuncia (anche salvato nella puntata): frasi veloci, frasi meno chiare, parole capite peggio, confronto parole con/senza R.

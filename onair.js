@@ -3,9 +3,12 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.7.0' };
+const APP = { name: 'GPverse OnAir', version: '4.7.1' };
 
 const CHANGELOG = [
+  { v: '4.7.1', date: '24/11/2026', title: 'Teleprompter staccato che non scorreva', items: [
+    'Se il teleprompter era in una finestra staccata e nella regia era stato nascosto col pulsante «Teleprompter», si vedeva ma non scorreva (in nessuna modalità). Ora in una finestra staccata scorre sempre.',
+    'Il pulsante «Teleprompter» della regia, quando il teleprompter è staccato, porta in primo piano la sua finestra invece di spegnerlo.' ] },
   { v: '4.7.0', date: '24/11/2026', title: 'Controllo della pronuncia mentre leggi', items: [
     'In «Segue le parole»: la parola appena sentita è evidenziata, quelle capite diventano verdi, quelle non capite rosse e sottolineate (anche le parole saltate a metà frase).',
     'Indicatore 🎙 Chiarezza % · parole al minuto (misurate mentre parli, senza le pause). Sulla riga di lettura compare «RALLENTA» se vai troppo veloce o «SCANDISCI» se le ultime parole non arrivano.',
@@ -2544,10 +2547,14 @@ const TP = {
     // «Segue le parole» parte da solo col via: la P premuta per abitudine nei primi secondi non lo ferma (prima serviva per avviarlo)
     if (this.mode === 'follow' && this.running && this.autoRunAt && performance.now() - this.autoRunAt < 15000) { toast('Il testo segue già la tua voce: non serve premere P'); return; }
     if (this.voiceWait && this.running) { this.voiceWait = null; this.lastT = performance.now(); this.layout(); return; } this.running = !this.running; this.voiceWait = null; this.lastT = performance.now(); this.layout(); },
+  /* visibile davvero: in una finestra staccata il teleprompter si vede sempre (il pulsante «Teleprompter» della regia non lo spegne) */
+  showBtn() { if (this.docked()) { try { DOCK.open[DOCK.winOf('prompter')].focus(); } catch (e) { } toast('Il teleprompter è nella sua finestra: per rimetterlo qui usa ⧉ → «Riaggancia»'); return; } this.visible = !this.visible; this.layout(); this.save(); },
+  docked() { const id = DOCK.winOf('prompter'); return !!(id && DOCK.isOpen(id)); },
+  shown() { return this.visible || this.docked(); },
   nudge(dir) { if (!this.view) return; this.push = (this.push || 0) + dir * this.size * 1.45 * 0.6; },
   frame(t) {
     const dt = Math.min(0.1, (t - (this.lastT || t)) / 1000); this.lastT = t;
-    if (!this.visible || !this.view) return;
+    if (!this.shown() || !this.view) return;
     if (this.push) {
       const step = Math.sign(this.push) * Math.min(Math.abs(this.push), Math.max(4, Math.abs(this.push) * 0.35));
       this.push -= step; if (Math.abs(this.push) < 0.5) this.push = 0;
@@ -2639,14 +2646,14 @@ const TP = {
     const fs = firstSingle(), sigLater = fs && this.cues.some(c => c.dataset.cue === cueWord(fs) && c.dataset.done !== '1' && !E.voices[fs.id]);
     // con «Segue le parole» il testo si muove solo quando parli: ascolta da subito, anche durante la sigla (il titolo detto sulla sigla fa scorrere il testo)
     const go = this.startMode === 'rec' || (this.startMode === 'intro' && (this.mode === 'follow' || !(fs && dk(fs.id)) || (sigLater && !singlePlaying())));
-    this.autoRunAt = 0; if (go && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.autoRunAt = performance.now(); }
+    this.autoRunAt = 0; if (go && this.text.trim() && this.shown()) { this.running = true; this.lastT = performance.now(); this.autoRunAt = performance.now(); }
     this.layout();
   },
   onSingleEnd(id) {
     // i loop chiesti durante la sigla partono quando nessuna sigla suona più
     if (this.pendingLoops.size && !singlePlaying()) { const l = [...this.pendingLoops]; this.pendingLoops.clear(); if (isRec()) for (const c of l) if (['paused', 'stopped'].includes(loopSt(c).status)) loopToggle(c); }
     const fs = firstSingle(); if (!fs || fs.id !== id) return;
-    if (this.startMode === 'intro' && isRec() && !this.running && this.text.trim() && this.visible) { this.running = true; this.lastT = performance.now(); this.layout(); } },
+    if (this.startMode === 'intro' && isRec() && !this.running && this.text.trim() && this.shown()) { this.running = true; this.lastT = performance.now(); this.layout(); } },
   onHold() { this.wasRunning = this.running; this.running = false; this.voiceWait = null; this.pendingLoops.clear(); this.layout(); },
   onResume(Tq, w0) {
     R.tpLog = R.tpLog.filter(e => e.t <= Tq + 0.01);
@@ -4088,7 +4095,7 @@ function onKeyMain(e) {
   else if (act === 'retake') enterHold('retake');
   else if (catOf(act)) catAction(act);
   else if (act === 'tpRun') TP.toggle();
-  else if (act === 'tpShow') { TP.visible = !TP.visible; TP.layout(); TP.save(); }
+  else if (act === 'tpShow') TP.showBtn();
   else if (act === 'sub') SUB.start();
   else if (act === 'tpBack') TP.nudge(-1);
   else if (act === 'tpFwd') TP.nudge(1);
@@ -4209,7 +4216,7 @@ function wire() {
   $('ptBig').addEventListener('click', () => { TP.size = Math.min(96, TP.size + 4); TP.layout(); TP.save(); });
   $('ptAuto').addEventListener('click', () => { TP.auto = !TP.auto; TP.layout(); TP.save(); });
   $('ptMirror').addEventListener('click', () => { TP.mirror = !TP.mirror; TP.layout(); TP.save(); });
-  $('tpBtn').addEventListener('click', () => { TP.visible = !TP.visible; TP.layout(); TP.save(); });
+  $('tpBtn').addEventListener('click', () => TP.showBtn());
   $('ptEditBtn').addEventListener('click', () => { if (isRec() || blocked()) return toast('Modifica il testo a registrazione ferma'); TP.edit(true); });
   $('ptCancel').addEventListener('click', () => TP.edit(false));
   $('ptSave').addEventListener('click', () => { TP.text = $('ptArea').value; TP.save(); TP.edit(false); TP.render(); TP.setTop(0); });
