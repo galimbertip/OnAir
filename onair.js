@@ -3,9 +3,15 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.5.0' };
+const APP = { name: 'GPverse OnAir', version: '4.6.0' };
 
 const CHANGELOG = [
+  { v: '4.6.0', date: '24/11/2026', title: 'Pannelli sganciabili: regia su un monitor, teleprompter sull\'altro', items: [
+    'Ogni pannello ha in alto un bottoncino ⧉: lo stacchi in un\'altra finestra da spostare sul secondo monitor o sul tablet collegato come schermo, e lo riagganci quando vuoi.',
+    'Più pannelli nella stessa finestra (es. teleprompter + mixer). Il teleprompter da solo occupa tutta la finestra: «Schermo intero» e «Solo testo» (modalità presentatore, i comandi ricompaiono muovendo il mouse).',
+    'Nuovo pannello «Cartelletta»: stato IN ONDA, tempo grande, cosa suona, prossimo segnale nel testo e pulsanti grandi da toccare (pausa, re-take, sigla, capitoli…). Pensato per il tablet.',
+    'Ogni set di pannelli ricorda le sue finestre (es. «Set fisso» con due monitor, «Set portatile» col tablet). All\'avvio un pulsante «↗ Riapri le finestre» le rimette dove erano.',
+    'Le scorciatoie funzionano da tutte le finestre; se ricarichi la regia le finestre si ricollegano da sole; se chiudi una finestra i suoi pannelli tornano nella regia; se la regia è coperta, video e teleprompter non si fermano.' ] },
   { v: '4.5.0', date: '21/11/2026', title: '«Segue le parole» affidabile e fluido', items: [
     'Niente più salti in avanti: le parole corte e comuni («e», «di», «un», «la»…) contano poco; per spostarsi lontano servono almeno 3 parole vere che combaciano, confermate dal risultato dopo. In una prova con riconoscimento «sporco» la versione prima saltava fino a 121 parole avanti, ora al massimo 3.',
     'Se il testo ripete parole già lette («macchina», «sviluppo»…), sceglie il punto credibile vicino a dove sei invece di restare fermo.',
@@ -255,7 +261,8 @@ const ROADMAP = [
   'Idee per il futuro: teleprompter che segue la voce, automazioni di volume disegnate sulla timeline'
 ];
 
-const $ = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id) || (window.DOCK ? DOCK.find(id) : null); // anche nelle finestre staccate
+const $all = (sel) => window.DOCK ? DOCK.all(sel) : [...document.querySelectorAll(sel)];
 /* ------------------------------------------------------------ Categorie audio
    Ogni categoria ha un comportamento: single (suona una volta), loop (lista che gira, si mette in pausa e riparte),
    list (stacchetti da lanciare uno alla volta). «duck»: mentre suona zittisce i loop, che poi ripartono da dove erano. */
@@ -478,7 +485,7 @@ const NS = {
     if (st.nsAi && this.rnn) { n.connect(this.rnn); n = this.rnn; }
     if (st.gate && this.gate) { n.connect(this.gate); n = this.gate; this.setGate(); }
     n.connect(E.micGain);
-    document.querySelectorAll('#liveStrips .gled, #setGateLed').forEach(l => { l.hidden = !(st.gate && this.gate); l.classList.remove('closed'); });
+    $all('#liveStrips .gled, #setGateLed').forEach(l => { l.hidden = !(st.gate && this.gate); l.classList.remove('closed'); });
   },
   setGate() { if (!this.gate) return; const t = E.ctx.currentTime; this.gate.parameters.get('thr').setValueAtTime(S.settings.gateThr ?? -35, t); this.gate.parameters.get('on').setValueAtTime(S.settings.gate ? 1 : 0, t); this.gate.parameters.get('pre').setValueAtTime(dbl(S.settings.micGain || 0), t); },
   /* Prova: registra 6 secondi prima e dopo la pulizia, da riascoltare a confronto */
@@ -1606,7 +1613,7 @@ const CAM = {
       this.video.srcObject = this.stream; await this.video.play();
       this.ok = true; this.err = null; this.lost = false; this.fresh = true;
       if (S.settings.video.vbg && this.bgCanvas) this.lockCamera();
-      if (this.video.requestVideoFrameCallback) { const v = this.video; const cb = () => { if (v.srcObject !== this.stream) return; this.fresh = true; this.camFrames++; v.requestVideoFrameCallback(cb); }; v.requestVideoFrameCallback(cb); this.rvfc = true; }
+      if (this.video.requestVideoFrameCallback) { const v = this.video; const cb = () => { if (v.srcObject !== this.stream) return; this.fresh = true; this.lastCb = performance.now(); this.camFrames++; v.requestVideoFrameCallback(cb); }; v.requestVideoFrameCallback(cb); this.rvfc = true; }
     } catch (e) { console.warn('Webcam', e); this.ok = false; this.err = e; }
     renderStatus();
   },
@@ -1693,6 +1700,8 @@ const CAM = {
       const has0 = this.ok && this.video.readyState >= 2 && this.video.videoWidth > 0, fg = frameGeom();
       const anim = !has0 ? Math.floor(t / 100) : (vsr.fx !== false && vsr.gl > 0.01) ? Math.floor(t / 1000 * 12) : 0;
       const sig = [vsr.fx, vsr.thr, vsr.gl, vsr.col, vsr.mirror, vsr.key, vsr.kc, vsr.tol, vsr.vbg, vsr.vtol, vsr.vmode, fg.view.join(), fg.mask.join(), fg.key, fg.vbg, fg.seg, this.dbg, this.edit, SEG.stamp, this.bgStamp, this.gain.map(x => x.toFixed(2)).join(), this.canvas.width].join('|');
+      // se la regia è coperta Chrome smette di avvisare dei fotogrammi nuovi: allora si prende comunque l'immagine (le finestre staccate tengono vivo il disegno)
+      if (this.rvfc && performance.now() - (this.lastCb || 0) > 150 && this.video.readyState >= 2) { this.fresh = true; this.camFrames++; }
       if (!(this.fresh || !this.rvfc || sig !== this.lastSig || anim !== this.lastAnim || this.edit)) { this.drew = false; return; }
       // modalità leggera: fuori registrazione l'anteprima va a 15 fotogrammi al secondo
       if (S.settings.lite && !isRec() && !this.edit && sig === this.lastSig && t - (this.lastDraw || 0) < 64) { this.drew = false; return; }
@@ -2448,7 +2457,7 @@ const TP = {
     $('ptRun').setAttribute('aria-pressed', String(this.running)); $('ptStart').value = this.startMode; $('ptMode').value = this.mode;
     $('ptRun').classList.toggle('listen', this.running && this.mode === 'follow' && VF.on); VF.score(); $('ptRun').classList.toggle('waiting', !!(this.running && this.voiceWait)); $('ptSpeedGrp').hidden = this.mode === 'follow';
     this.vh = 0;
-    $('prompter').hidden = !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
+    $('prompter').hidden = DOCK.winOf('prompter') && DOCK.isOpen(DOCK.winOf('prompter')) ? false : !this.visible || (!ORIENT.wide && LAY.cur && LAY.cur.hidden && LAY.cur.hidden.includes('prompter')); $('tpBtn').setAttribute('aria-pressed', String(this.visible));
   },
   lineY() { if (!this.vh || performance.now() - (this.vhT || 0) > 500) { this.vh = this.view.clientHeight; this.vhT = performance.now(); } return this.vh * 0.3; },
   cueY(c) { return c.offsetTop - this.view.scrollTop; },
@@ -2609,7 +2618,7 @@ const DECKUI = {
   cards: {},
   build() {
     const host = $('panels'); if (!host) return;
-    host.querySelectorAll('.deckc').forEach(el => el.remove()); this.cards = {};
+    $all('.deckc').forEach(el => el.remove()); this.cards = {};
     const mixer = host.querySelector('[data-panel="mixer"]'), fl = firstList();
     for (const c of userCats()) {
       const el = document.createElement('section'); el.className = 'card pnl deckc'; el.dataset.panel = c.id; el.dataset.cat = c.id; el.style.setProperty('--cc', c.color);
@@ -2642,6 +2651,7 @@ const DECKUI = {
       this.cards[c.id] = { el, prog: el.querySelector('.prog i') };
     }
     if (typeof renderKeys === 'function') renderKeys();
+    if (window.DOCK && DOCK.ready) DOCK.place(); // le schede staccate tornano nella loro finestra
   }
 };
 function renderDeck() {
@@ -2735,12 +2745,13 @@ const mixStyleNow = () => ORIENT.wide ? (S.settings.mixStyleWide || 'bars') : (S
 function placeEqPop(de) {
   const pop = de._pop || (de._pop = de.querySelector('.eqpop'));
   if (!de.open) { if (pop.parentElement !== de) de.append(pop); pop.classList.remove('eqfloat', 'below'); pop.style.cssText = ''; delete pop.dataset.moved; return; }
-  document.querySelectorAll('#liveStrips details.eq[open]').forEach(o => { if (o !== de) o.open = false; });
+  $all('#liveStrips details.eq[open]').forEach(o => { if (o !== de) o.open = false; });
   // Menu a comparsa agganciato all'ingranaggio, sopra la riga (sotto se in alto non c'è spazio); si sposta trascinando la testata
-  if (pop.parentElement !== document.body) { document.body.append(pop); pop.classList.add('eqfloat'); pop.style.setProperty('--cc', getComputedStyle(de.closest('.strip')).getPropertyValue('--cc')); dragPop(pop); }
+  const doc = de.ownerDocument, win = doc.defaultView, iw = win.innerWidth; // il mixer può stare in una finestra staccata
+  if (pop.parentElement !== doc.body) { doc.body.append(doc.adoptNode(pop)); pop.classList.add('eqfloat'); pop.style.setProperty('--cc', win.getComputedStyle(de.closest('.strip')).getPropertyValue('--cc')); dragPop(pop); }
   if (pop.dataset.moved) return;
-  const r = de.querySelector('summary').getBoundingClientRect(), w = Math.min(380, innerWidth - 24); pop.style.width = w + 'px';
-  const h = pop.offsetHeight, left = Math.max(12, Math.min(innerWidth - w - 12, r.right - w + 14));
+  const r = de.querySelector('summary').getBoundingClientRect(), w = Math.min(380, iw - 24); pop.style.width = w + 'px';
+  const h = pop.offsetHeight, left = Math.max(12, Math.min(iw - w - 12, r.right - w + 14));
   const below = r.top - h - 12 < 8; pop.classList.toggle('below', below);
   pop.style.left = left + 'px'; pop.style.top = (below ? r.bottom + 10 : Math.max(8, r.top - h - 10)) + 'px';
   pop.style.setProperty('--ax', Math.max(14, Math.min(w - 14, r.left + r.width / 2 - left)) + 'px');
@@ -2752,7 +2763,7 @@ function dragPop(pop) {
     if (e.target.closest('button')) return; e.preventDefault(); hd.setPointerCapture(e.pointerId);
     const r = pop.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
     const mv = (ev) => { pop.dataset.moved = '1'; pop.classList.remove('below'); pop.style.setProperty('--ax', '-99px');
-      pop.style.left = Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx)) + 'px'; pop.style.top = Math.max(0, Math.min(innerHeight - 40, ev.clientY - dy)) + 'px'; };
+      const vw = pop.ownerDocument.defaultView; pop.style.left = Math.max(0, Math.min(vw.innerWidth - r.width, ev.clientX - dx)) + 'px'; pop.style.top = Math.max(0, Math.min(vw.innerHeight - 40, ev.clientY - dy)) + 'px'; };
     const up = () => { hd.removeEventListener('pointermove', mv); hd.removeEventListener('pointerup', up); };
     hd.addEventListener('pointermove', mv); hd.addEventListener('pointerup', up);
   });
@@ -2845,8 +2856,9 @@ const PERF = { work: 0, t0: 0, pct: 0 };
 const MICPK = { v: -100, t: 0 };
 const tbuf = new Float32Array(2048);
 function peakDb(an) { an.getFloatTimeDomainData(tbuf); let p = 0; for (let i = 0; i < tbuf.length; i++) { const a = Math.abs(tbuf[i]); if (a > p) p = a; } return p > 0 ? 20 * Math.log10(p) : -100; }
-function loop(t) {
-  const w0 = performance.now();
+function loop(t) { frameWork(t || performance.now()); requestAnimationFrame(loop); }
+function frameWork(t) {
+  const w0 = performance.now(); frameWork.last = w0;
   if (E.ctx) {
     const T = isRec() ? Math.max(0, tlAt(now())) : R.state === 'hold' ? R.len / E.sr : 0;
     const tcs = fmt(R.state === 'preroll' ? R.Tanchor : T); if (tcs !== loop.tcs) { $('tc').textContent = tcs; loop.tcs = tcs; }
@@ -2883,7 +2895,7 @@ function loop(t) {
   // quanto tempo del processore usa l'app a ogni fotogramma (mostrato in Impostazioni → Prestazioni)
   const wn = performance.now(); PERF.work += wn - w0; if (!PERF.t0) PERF.t0 = wn;
   if (wn - PERF.t0 >= 2000) { PERF.pct = PERF.work / (wn - PERF.t0) * 100; PERF.work = 0; PERF.t0 = wn; const el = $('perfInfo'); if (el && !$('setModal').hidden) el.textContent = `Lavoro dell'app in questo momento: ${PERF.pct.toFixed(0)}% del tempo del processore principale` + (PERF.pct > 50 ? ' · è tanto: prova la modalità leggera o il video a 540p' : PERF.pct > 25 ? ' · nella norma' : ' · leggero'); }
-  requestAnimationFrame(loop);
+  if (E.ctx && t - (CARD.t || 0) > 250) { CARD.t = t; CARD.update(); }
 }
 
 /* Sessioni */
@@ -3479,7 +3491,7 @@ function openChangelog() {
 
 /* Impostazioni */
 async function openSettings() {
-  LAY.renderSettings();
+  LAY.renderSettings(); DOCK.renderSettings();
   $('setRetake').value = S.settings.retakeSec; $('setPre').value = S.settings.preroll; $('setNs').value = S.settings.ns ? '1' : '0';
   $('setModal').hidden = false;
 }
@@ -3518,7 +3530,7 @@ const ORIENT = {
   /* In orizzontale l'anteprima video si rimpicciolisce per stare nel suo riquadro (i comandi scorrono sotto) */
   fitVideo() {
     const card = $('vcard'), box = $('vBox'); if (!card || !box) return;
-    if (!this.wide || card.hidden) { box.style.width = ''; box.style.alignSelf = ''; return; }
+    if (!this.wide || card.hidden || card.ownerDocument !== document) { box.style.width = ''; box.style.alignSelf = ''; return; } // in una finestra staccata decide la finestra
     const cs = getComputedStyle(card), px = (k) => parseFloat(cs[k]) || 0;
     const inner = card.clientWidth - px('paddingLeft') - px('paddingRight');
     const h2 = card.querySelector('h2').offsetHeight;
@@ -3535,7 +3547,7 @@ const ORIENT = {
 
 /* Disposizione dei pannelli */
 const PANELS_BASE = [['transport', 'Registrazione (contatore e pulsanti)'], ['prompter', 'Teleprompter'], ['video', 'Video']];
-const panelsAll = () => [...PANELS_BASE, ...userCats().map(c => [c.id, c.name]), ['mixer', 'Mixer']];
+const panelsAll = () => [...PANELS_BASE, ...userCats().map(c => [c.id, c.name]), ['mixer', 'Mixer'], ['cartella', 'Cartelletta (tablet)']];
 const panelName = (p) => (panelsAll().find(x => x[0] === p) || [p, p])[1];
 const LAY_PRESETS = {
   classico: { name: 'Classico', order: ['transport', 'prompter', 'video', 'intro', 'bg', 'cap', 'mixer'], w: { transport: '1', prompter: '2/3', video: '1/3', intro: '1/3', bg: '1/3', cap: '1/3', mixer: '1' }, hidden: [], tall: false },
@@ -3582,8 +3594,8 @@ const LAY = {
   all() {
     const out = {}, ids = panelsAll().map(x => x[0]);
     for (const [k, L0] of Object.entries({ ...LAY_PRESETS, ...(S.settings.layouts || {}) })) {
-      const L = { ...L0, order: L0.order.filter(p => ids.includes(p)), w: { ...L0.w } };
-      for (const p of ids) if (!L.order.includes(p)) { const mi = L.order.indexOf('mixer'); L.order.splice(mi < 0 ? L.order.length : mi, 0, p); L.w[p] = L.w[p] || '1/3'; }
+      const L = { ...L0, order: L0.order.filter(p => ids.includes(p)), w: { ...L0.w }, hidden: [...(L0.hidden || [])] };
+      for (const p of ids) if (!L.order.includes(p)) { const mi = L.order.indexOf('mixer'); L.order.splice(mi < 0 ? L.order.length : mi, 0, p); L.w[p] = L.w[p] || '1/3'; if (p === 'cartella' && !L.hidden.includes(p)) L.hidden.push(p); }
       out[k] = L;
     }
     return out;
@@ -3595,6 +3607,7 @@ const LAY = {
     $('prompter').dataset.tall = L.tall ? '1' : '0';
     if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
     if (typeof ORIENT !== 'undefined' && ORIENT.wide) ORIENT.apply();
+    DOCK.place();
   },
   edit: null,
   renderSettings() {
@@ -3700,7 +3713,7 @@ const normKey = (k, shift) => k.length === 1 ? k.toLowerCase() : (shift && !['Sh
 const KNAMES = { ' ': 'Spazio', Enter: 'Invio', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', Tab: 'Tab', Backspace: '⌫' };
 const keyLabel = (act) => { let k = KEYS()[act] || ''; let pre = ''; if (k.startsWith('Shift+')) { pre = 'Shift+'; k = k.slice(6); } return pre + (KNAMES[k] || (k.length === 1 ? k.toUpperCase() : k)); };
 function renderKeys() {
-  document.querySelectorAll('[data-act]').forEach(el => { el.textContent = keyLabel(el.dataset.act); });
+  $all('[data-act]').forEach(el => { el.textContent = keyLabel(el.dataset.act); });
   const lg = $('keysLegend'); if (lg) {
     lg.replaceChildren();
     const add = (k, t) => { const sp = document.createElement('span'); sp.innerHTML = `<span class="kbd"></span> `; sp.firstChild.textContent = k; sp.append(t); lg.append(sp); };
@@ -3780,6 +3793,187 @@ const HELP = {
   },
   onRecStart() { if (S.settings.helpOnRec !== false) this.openPip(); },
   onFinish() { if (this.pip && !this.pip.closed && S.settings.helpOnRec !== false) { this.pip.close(); this.pip = null; clearInterval(this.iv); } }
+};
+
+
+/* ------------------------------------------------ Finestre staccate
+   Ogni pannello si può staccare in un'altra finestra (secondo monitor, tablet collegato come schermo) e riagganciare;
+   più pannelli possono stare nella stessa finestra. Gli elementi veri vengono SPOSTATI nella finestra (dock.html),
+   quindi restano collegati ad audio, video e registrazione. Ogni set di pannelli ricorda le sue finestre. */
+const DOCK = {
+  ready: false, open: {}, back: {}, rectT: 0, placing: false, barT: 0,
+  cfg() { S.settings.dockBy = S.settings.dockBy || {}; const k = S.settings.layout || 'classico'; return S.settings.dockBy[k] || (S.settings.dockBy[k] = { wins: {} }); },
+  wins() { return this.cfg().wins; },
+  winOf(p) { const W = this.wins(); for (const id in W) if ((W[id].panels || []).includes(p)) return id; return null; },
+  isOpen(id) { const w = this.open[id]; try { return !!(w && !w.closed && w.document && w.document.getElementById('dockHost')); } catch (e) { return false; } },
+  docs() { const out = []; for (const id in this.open) if (this.isOpen(id)) out.push(this.open[id].document); return out; },
+  find(id) { for (const d of this.docs()) { const el = d.getElementById(id); if (el) return el; } return null; },
+  all(sel) { const out = [...document.querySelectorAll(sel)]; for (const d of this.docs()) out.push(...d.querySelectorAll(sel)); return out; },
+  panelEl(p) { return this.all(`[data-panel="${p}"]`)[0] || null; },
+  host(id) { return this.isOpen(id) ? this.open[id].document.getElementById('dockHost') : null; },
+  nextId() { let i = 1; while (this.wins()[i]) i++; return String(i); },
+  label(id) { const W = this.wins()[id]; return W ? (W.panels || []).map(panelName).join(' + ') : ''; },
+  /* apre la finestra (serve un clic: i browser bloccano le finestre aperte da sole) */
+  openWin(id) {
+    const W = this.wins()[id] || {}, r = W.rect || {};
+    const f = `popup,width=${Math.round(r.w || 980)},height=${Math.round(r.h || 720)}` + (r.x != null ? `,left=${Math.round(r.x)},top=${Math.round(r.y)}` : '');
+    let w = null; try { w = window.open('dock.html', 'onair-dock-' + id, f); } catch (e) { }
+    if (!w) { toast('Il browser ha bloccato la finestra: consenti i popup per questo sito (icona a destra nella barra degli indirizzi) e riprova', 7000); return null; }
+    this.pending = this.pending || {}; this.pending[id] = w; return w;
+  },
+  /* sposta un pannello in una finestra (id vuoto = nuova) */
+  detach(p, id) {
+    const W = this.wins(), from = this.winOf(p); id = id || this.nextId();
+    if (from === id) return;
+    if (from) W[from].panels = W[from].panels.filter(x => x !== p);
+    W[id] = W[id] || { panels: [], rect: null }; W[id].panels.push(p);
+    saveSettings();
+    if (!this.isOpen(id)) this.openWin(id); // la finestra si presenta da sola (hello) e prende i suoi pannelli
+    this.place();
+  },
+  attach(p) { const W = this.wins(), from = this.winOf(p); if (from) W[from].panels = W[from].panels.filter(x => x !== p); saveSettings(); this.place(); },
+  attachAll() { for (const id in this.wins()) this.wins()[id].panels = []; saveSettings(); this.place(); },
+  /* mette ogni pannello nel documento giusto e chiude le finestre rimaste vuote */
+  place() {
+    if (this.placing || !this.ready) return; this.placing = true;
+    try {
+      const main = $('panels'), W = this.wins(); let back = false;
+      for (const [p] of panelsAll()) {
+        const el = this.panelEl(p); if (!el) continue; this.decorate(el);
+        const id = this.winOf(p), h = id && this.host(id);
+        if (h) { if (el.parentNode !== h) { h.append(h.ownerDocument.adoptNode(el)); if (p === 'video') { const bx = $('vBox'); bx.style.width = ''; bx.style.alignSelf = ''; } } el.hidden = false; el.style.order = ''; el.dataset.w = '1'; }
+        else if (el.ownerDocument !== document || !main.contains(el)) { main.append(document.adoptNode(el)); back = true; if (p === 'video') requestAnimationFrame(() => ORIENT.fitVideo()); }
+      }
+      // pannelli che non esistono più (categoria eliminata) rimasti in una finestra
+      for (const d of this.docs()) for (const el of d.querySelectorAll('#dockHost > [data-panel]')) if (!panelsAll().some(x => x[0] === el.dataset.panel)) el.remove();
+      for (const id in W) if (!(W[id].panels || []).length) delete W[id]; // finestre rimaste senza pannelli: si dimenticano
+      for (const id in this.open) {
+        if (!this.isOpen(id)) continue;
+        const w = this.open[id], ps = (W[id] && W[id].panels) || [];
+        if (!ps.length) { delete this.open[id]; try { w.close(); } catch (e) { } continue; }
+        const h = this.host(id), d = w.document; h.classList.toggle('haspt', ps.includes('prompter')); h.classList.toggle('ptonly', ps.length === 1 && ps[0] === 'prompter');
+        d.body.classList.toggle('tponly', !!W[id].tponly && ps.includes('prompter')); d.title = 'OnAir · ' + this.label(id);
+        const order = ['prompter', 'cartella', 'transport', 'video', ...userCats().map(c => c.id), 'mixer']; [...h.children].sort((a, b) => order.indexOf(a.dataset.panel) - order.indexOf(b.dataset.panel)).forEach(x => h.append(x));
+      }
+      if (back) { const y = TP.view ? TP.view.scrollTop : 0; LAY.apply(S.settings.layout); if (TP.view) TP.setTop(y); }
+      if (ORIENT.wide) WIDE.build(LAY.cur);
+      if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); }
+      this.renderBar(); if (!$('setModal').hidden) this.renderSettings();
+    } finally { this.placing = false; }
+  },
+  /* la finestra staccata si presenta: copia gli stili e riceve i suoi pannelli */
+  hello(w) {
+    const id = String(w.name || '').replace('onair-dock-', ''); if (!id || id === w.name) return;
+    const d = w.document;
+    if (!this.wins()[id] || !(this.wins()[id].panels || []).length) { setTimeout(() => { try { w.close(); } catch (e) { } }, 50); return; } // finestra di un'altra sessione o di un altro set
+    this.open[id] = w; clearTimeout(this.back[id]); if (this.pending) delete this.pending[id];
+    if (!d.getElementById('dockCss')) { const st = d.createElement('style'); st.id = 'dockCss'; st.textContent = [...document.querySelectorAll('head style')].map(x => x.textContent).join('\n'); d.head.append(st); }
+    d.body.classList.toggle('wide', ORIENT.wide);
+    this.place();
+  },
+  /* la finestra si chiude o si ricarica: i pannelli tornano SUBITO nella regia */
+  bye(w) {
+    const id = String(w.name || '').replace('onair-dock-', ''); if (this.open[id] !== w) return;
+    try { const h = w.document.getElementById('dockHost'); for (const el of [...h.children]) if (el.dataset.panel) $('panels').append(document.adoptNode(el)); w.document.querySelectorAll('body > .eqfloat').forEach(e => e.remove()); } catch (e) { }
+    delete this.open[id]; if (this.unloading) return;
+    this.place();
+    // se non si ripresenta subito (era una ricarica) vuol dire che l'hai chiusa: i suoi pannelli restano nella regia
+    this.back[id] = setTimeout(() => { if (!this.isOpen(id) && this.wins()[id]) { delete this.wins()[id]; saveSettings(); this.renderBar(); if (!$('setModal').hidden) this.renderSettings(); } }, 2500);
+  },
+  /* ritmo di disegno dalle finestre staccate, se quello della regia è fermo (regia coperta o ridotta a icona) */
+  tick() {
+    if (!this.ready) return; const n = performance.now();
+    if (n - (frameWork.last || 0) > 40) frameWork(n);
+    if (n - this.rectT > 2000) { this.rectT = n; let ch = false;
+      for (const id in this.open) { if (!this.isOpen(id)) continue; const w = this.open[id], W = this.wins()[id]; if (!W) continue;
+        const r = { x: w.screenX, y: w.screenY, w: w.outerWidth, h: w.outerHeight }; if (w.document.fullscreenElement) continue;
+        if (!W.rect || ['x', 'y', 'w', 'h'].some(k => Math.abs((W.rect[k] || 0) - r[k]) > 4)) { W.rect = r; ch = true; } }
+      if (ch) saveSettings(); }
+  },
+  onPointer(w, e) { if (DOCK.eqClose) DOCK.eqClose(e); const m = w.document.querySelector('.dockmenu'); if (m && !e.target.closest('.dockmenu, .dockbtn')) m.remove(); },
+  onMove(w) { const b = w.document.body; if (!b.classList.contains('tponly')) return; b.classList.add('showbar'); clearTimeout(w.__barT); w.__barT = setTimeout(() => b.classList.remove('showbar'), 2500); },
+  onResize() { if (TP.view) { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); } $all('#liveStrips.bars details.eq[open]').forEach(placeEqPop); },
+  /* bottoncino ⧉ su ogni pannello */
+  decorate(el) {
+    if (el.querySelector(':scope > .dockbtn')) return;
+    const b = el.ownerDocument.createElement('button'); b.className = 'dockbtn'; b.type = 'button'; b.textContent = '⧉'; b.title = 'Sposta questo pannello in un\'altra finestra (secondo monitor, tablet) o riaggancialo';
+    b.addEventListener('click', (e) => { e.stopPropagation(); this.menu(el, b); }); el.prepend(b);
+  },
+  menu(el, b) {
+    const d = el.ownerDocument, p = el.dataset.panel, cur = this.winOf(p), old = d.querySelector('.dockmenu'); if (old) { old.remove(); if (old._p === p) return; }
+    const m = d.createElement('div'); m._p = p; m.className = 'dockmenu'; m.setAttribute('role', 'menu');
+    const add = (txt, fn, note) => { const x = d.createElement('button'); x.type = 'button'; x.innerHTML = txt + (note ? `<small>${note}</small>` : ''); x.addEventListener('click', () => { m.remove(); fn(); }); m.append(x); };
+    if (cur) add('↙ Riaggancia alla regia', () => this.attach(p));
+    for (const id in this.wins()) if (id !== cur) add('↗ Nella finestra ' + id, () => this.detach(p, id), this.label(id) + (this.isOpen(id) ? '' : ' · chiusa'));
+    add('↗ In una nuova finestra', () => this.detach(p, ''), 'da spostare sull\'altro schermo');
+    if (cur && p === 'prompter') { add(this.wins()[cur].tponly ? '☰ Mostra i comandi del teleprompter' : '▭ Solo testo (presentatore)', () => { this.wins()[cur].tponly = !this.wins()[cur].tponly; saveSettings(); this.place(); }); add('⛶ Schermo intero', () => this.full(cur)); }
+    else if (cur) add('⛶ Schermo intero', () => this.full(cur));
+    const r = b.getBoundingClientRect(), vw = d.defaultView.innerWidth; m.style.top = (r.bottom + 4) + 'px'; m.style.left = Math.max(8, Math.min(vw - 290, r.left + r.width / 2 - 140)) + 'px';
+    d.body.append(m);
+  },
+  full(id) { if (!this.isOpen(id)) return; const d = this.open[id].document; try { d.fullscreenElement ? d.exitFullscreen() : d.documentElement.requestFullscreen(); } catch (e) { toast('Schermo intero non disponibile: premi F11 nella finestra'); } },
+  /* barra nella regia: finestre da riaprire */
+  renderBar() {
+    const bar = $('dockBar'); if (!bar) return; const miss = Object.keys(this.wins()).filter(id => !this.isOpen(id) && !(this.pending && this.pending[id] && !this.pending[id].closed));
+    bar.hidden = !miss.length; if (!miss.length) return;
+    bar.textContent = miss.length === 1 ? `↗ Riapri la finestra: ${this.label(miss[0])}` : `↗ Riapri ${miss.length} finestre`;
+    bar.title = miss.map(id => 'Finestra ' + id + ': ' + this.label(id)).join('\n');
+  },
+  reopen() { const miss = Object.keys(this.wins()).filter(id => !this.isOpen(id)); let n = 0; for (const id of miss) if (this.openWin(id)) n++; this.renderBar(); return n; },
+  renderSettings() {
+    const box = $('dockList'); if (!box) return; box.replaceChildren(); const W = this.wins();
+    if (!Object.keys(W).length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Nessuna finestra staccata in questo set. Usa il bottoncino ⧉ in alto su ogni pannello.'; box.append(p); }
+    for (const id in W) { const r = document.createElement('div'); r.className = 'row'; const t = document.createElement('span'); t.style.flex = '1'; t.textContent = `Finestra ${id}: ${this.label(id)} ${this.isOpen(id) ? '· aperta' : '· chiusa'}`; r.append(t);
+      const a = document.createElement('button'); a.textContent = this.isOpen(id) ? 'Schermo intero' : 'Apri'; a.addEventListener('click', () => { this.isOpen(id) ? this.full(id) : this.openWin(id); }); r.append(a);
+      const c = document.createElement('button'); c.textContent = 'Riaggancia'; c.addEventListener('click', () => { W[id].panels = []; saveSettings(); this.place(); this.renderSettings(); }); r.append(c); box.append(r); }
+    const sc = $('dockScreens'); if (sc) sc.hidden = !('getScreenDetails' in window);
+  },
+  async allowScreens() { try { const sd = await window.getScreenDetails(); toast(`Permesso dato: OnAir vede ${sd.screens.length} schermi e riapre le finestre dove le avevi lasciate`); } catch (e) { toast('Permesso non dato: le finestre si riaprono sullo schermo della regia, poi le sposti tu'); } },
+  init() {
+    this.ready = true;
+    $('dockBar').addEventListener('click', () => { const n = this.reopen(); if (n) toast(n === 1 ? 'Finestra riaperta' : n + ' finestre riaperte'); });
+    $('dockAttachAll').addEventListener('click', () => { this.attachAll(); this.renderSettings(); toast('Tutti i pannelli sono tornati nella regia'); });
+    $('dockScreens').addEventListener('click', () => this.allowScreens());
+    // le finestre rimaste aperte (es. dopo aver ricaricato la regia) si ricollegano da sole; le altre si riaprono con un clic
+    this.place(); setTimeout(() => this.renderBar(), 2500);
+    addEventListener('pagehide', () => { this.unloading = true; });
+  }
+};
+window.DOCK = DOCK;
+
+/* ------------------------------------------------ Cartelletta: il foglio del presentatore (per il tablet o il secondo schermo) */
+const CARD = {
+  sig: '',
+  act(a) {
+    if (a === 'rec') { if (R.state === 'idle') recStart(); else if (R.state === 'rec' || R.state === 'preroll') enterHold('pause'); else if (R.state === 'hold') commitHold(); }
+    else if (a === 'retake') { if (R.state === 'rec' || R.state === 'preroll') enterHold('retake'); }
+    else if (a === 'tpRun') TP.toggle();
+    else if (a === 'sub') SUB.start();
+    else if (catOf(a)) catAction(a);
+    HELP.refresh(); this.update(true);
+  },
+  update(force) {
+    const el = $('cartella'); if (!el || el.hidden || !el.isConnected) return;
+    const st = R.state, lbl = { idle: ['PRONTO', ''], rec: ['● IN ONDA', 'rec'], preroll: ['● IN ONDA', 'rec'], hold: ['IN PAUSA', 'hold'] }[st] || [st, ''];
+    const s = $('ctSt'); if (s.textContent !== lbl[0]) { s.textContent = lbl[0]; s.className = 'ct-st ' + lbl[1]; }
+    const tc = $('tc').textContent.replace(/\.\d$/, ''); if ($('ctTc').textContent !== tc) $('ctTc').textContent = tc;
+    const playing = userCats().filter(c => E.voices[c.id] || (c.type === 'loop' && loopSt(c.id).status === 'play')).map(c => c.name).join(' · ') || 'solo voce';
+    if ($('ctNow').textContent !== playing) $('ctNow').textContent = playing;
+    const nx = (TP.cues || []).find(c => c.dataset.fired !== '1' && c.dataset.done !== '1');
+    let nt = '—', ni = '';
+    if (nx) { nt = nx.textContent.trim(); const wi = +nx.dataset.wi; if (TP.mode === 'follow' && !isNaN(wi)) { const k = Math.max(0, wi - VF.pos); ni = k ? `tra ${k} parol${k === 1 ? 'a' : 'e'}` : 'adesso'; } else { const ly = TP.lineY(), y = TP.cueY(nx), lh = TP.size * 1.45, r = Math.max(0, Math.round((y - ly) / lh)); ni = r ? `tra ${r} rig${r === 1 ? 'a' : 'he'}` : 'adesso'; } }
+    if ($('ctNext').textContent !== nt) $('ctNext').textContent = nt; if ($('ctNextIn').textContent !== ni) $('ctNextIn').textContent = ni;
+    // pulsanti grandi (da toccare sul tablet): si ricostruiscono solo se cambia qualcosa
+    const main = st === 'idle' ? '● REGISTRA' : st === 'hold' ? '▶ RIPRENDI' : '‖ PAUSA';
+    const sig = [st, main, userCats().map(c => c.id + c.name).join(), TP.running].join('|'); if (sig === this.sig && !force) return; this.sig = sig;
+    const box = $('ctBtns'), d = box.ownerDocument; box.replaceChildren();
+    const btn = (txt, a, cls, dis) => { const b = d.createElement('button'); b.type = 'button'; b.className = cls || ''; b.textContent = txt; b.disabled = !!dis; b.addEventListener('click', () => this.act(a)); box.append(b); };
+    btn(main, 'rec', 'big ' + (st === 'idle' ? 'rec' : ''));
+    btn('↶ RE-TAKE', 'retake', 'big', !(st === 'rec' || st === 'preroll'));
+    for (const c of userCats()) btn((c.type === 'list' ? '▶ ' : c.type === 'loop' ? '⏯ ' : '▶ ') + c.name, c.id, '', !dk(c.id) && !dkList(c.id).length);
+    btn(TP.running ? '⏸ Ferma il testo' : '⏯ Fai scorrere il testo', 'tpRun');
+    btn('🔔 Iscriviti', 'sub');
+  }
 };
 
 /* Tastiera (anche dalla finestra dello specchietto) */
@@ -4148,13 +4342,14 @@ function wire() {
 
   const STY = { console: 'console', compact: 'compatta', bars: 'a barre' };
   const nextSty = () => { const list = ORIENT.wide ? ['bars', 'console', 'compact'] : ['console', 'compact']; const cur = mixStyleNow(); return list[(list.indexOf(cur) + 1) % list.length]; };
-  const mkLive = () => { document.querySelectorAll('body > .eqfloat').forEach(e => e.remove()); meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = '⇄ Vista ' + STY[nextSty()]; $('setMixStyle').value = S.settings.mixStyle || 'console'; $('setMixStyleWide').value = S.settings.mixStyleWide || 'bars'; };
+  const mkLive = () => { $all('body > .eqfloat').forEach(e => e.remove()); meterRefs = buildMixer($('liveStrips'), S.mix, { onChange: () => { applyLevels(); saveDeck(); }, meters: true, mutes: S.mutes }); $('mixStyleBtn').textContent = '⇄ Vista ' + STY[nextSty()]; $('setMixStyle').value = S.settings.mixStyle || 'console'; $('setMixStyleWide').value = S.settings.mixStyleWide || 'bars'; };
   mkLive(); ORIENT.onWide = mkLive;
   $('mixStyleBtn').addEventListener('click', () => { const n = nextSty(); if (ORIENT.wide) S.settings.mixStyleWide = n; else S.settings.mixStyle = n; saveSettings(); mkLive(); });
   $('setMixStyle').addEventListener('change', (e) => { S.settings.mixStyle = e.target.value; saveSettings(); mkLive(); });
   $('setMixStyleWide').addEventListener('change', (e) => { S.settings.mixStyleWide = e.target.value; saveSettings(); mkLive(); });
-  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#liveStrips details.eq, .eqfloat')) document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(o => { o.open = false; }); });
-  addEventListener('resize', () => document.querySelectorAll('#liveStrips.bars details.eq[open]').forEach(placeEqPop));
+  DOCK.eqClose = (e) => { if (!e.target.closest('#liveStrips details.eq, .eqfloat')) $all('#liveStrips.bars details.eq[open]').forEach(o => { o.open = false; }); };
+  document.addEventListener('pointerdown', (e) => DOCK.eqClose(e));
+  addEventListener('resize', () => $all('#liveStrips.bars details.eq[open]').forEach(placeEqPop));
 }
 
 /* Avvio */
@@ -4203,7 +4398,7 @@ async function boot() {
       $('boot').hidden = true; $('app').hidden = false;
       CAM.setup(); OUT.setup(); await OUT.loadImages(); await CAM.loadScene();
       try { await ensureSubFx(); rebuildActions(); } catch (e) { console.warn('suono iscriviti', e); }
-      wire(); SIGBAR.setup(); renderAll(); TP.render(); requestAnimationFrame(loop);
+      wire(); SIGBAR.setup(); renderAll(); TP.render(); DOCK.init(); requestAnimationFrame(loop);
       if (S.settings.camId !== 'none') await CAM.init(S.settings.camId); else CAM.chosen = 'none';
       await DEV.open(true);
       await preloadDeck(); await recoverSessions(); SYNC.startupCheck();

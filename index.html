@@ -481,6 +481,53 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   .tbtns .kbd{display:none}
   .keys{display:none}
 }
+
+/* ---- finestre staccate ---- */
+.pnl{position:relative}
+.dockbtn{position:absolute;top:-1px;left:50%;transform:translateX(-50%);z-index:6;font:700 11px/1 var(--f-mono);padding:2px 12px 4px;border-radius:0 0 8px 8px;border:1px solid var(--line2);border-top:0;background:var(--panel);color:var(--dim);opacity:.35;cursor:pointer;min-height:0}
+.pnl:hover>.dockbtn,.dockbtn:focus-visible{opacity:1;color:var(--cyan)}
+@media (hover:none){.dockbtn{opacity:.8}}
+.dockmenu{position:fixed;z-index:999;width:280px;display:flex;flex-direction:column;gap:2px;padding:6px;background:#0a0f1c;border:1px solid var(--line2);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.dockmenu button{text-align:left;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:7px}
+.dockmenu small{font-size:11px;color:var(--dim);font-weight:400}
+.dockbar{border-color:var(--warn)!important;color:var(--warn)!important}
+body.dockwin{margin:0;padding:10px;height:100vh;box-sizing:border-box;overflow:hidden}
+#dockHost{display:grid;gap:10px;height:100%;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));align-content:start;overflow:auto}
+#dockHost.haspt{grid-template-columns:minmax(0,2fr) minmax(320px,1fr);grid-auto-rows:min-content;align-content:stretch}
+#dockHost.haspt>.prompter{grid-column:1;grid-row:1 / span 40;height:calc(100vh - 20px);min-height:0}
+#dockHost.ptonly{grid-template-columns:1fr}
+#dockHost>.pnl{width:auto!important;min-width:0}
+#dockHost>.prompter{display:flex;flex-direction:column}
+#dockHost>.prompter .pt-view{flex:1;height:auto!important;min-height:0}
+#dockHost>.vcard{display:flex;flex-direction:column}
+body.dockwin.tponly{padding:0}
+body.tponly #dockHost{gap:0}
+body.tponly #dockHost>.prompter{border:0;border-radius:0;padding:0;height:100vh}
+body.tponly #dockHost>.prompter .pt-view{border:0;border-radius:0}
+body.tponly #dockHost>.prompter>.dockbtn{opacity:0}
+body.tponly.showbar #dockHost>.prompter>.dockbtn{opacity:1}
+body.tponly #dockHost>.prompter .pt-bar{display:none}
+body.tponly.showbar #dockHost>.prompter .pt-bar{display:flex;position:fixed;top:0;left:0;right:0;z-index:5;background:rgba(5,7,13,.94);padding:10px 14px;border-bottom:1px solid var(--line2)}
+/* mixer a barre nella colonna laterale (o in una finestra stretta): una fonte per riga, come nelle colonne della regia */
+#dockHost.haspt .strips.bars,body.dockwin .strips.bars.narrow{grid-template-columns:minmax(0,1fr)}
+#dockHost.haspt .strips.bars .strip{grid-column:auto!important;grid-row:auto!important}
+@media (max-width:900px){body.dockwin .strips.bars{grid-template-columns:minmax(0,1fr)}body.dockwin .strips.bars .strip{grid-column:auto!important;grid-row:auto!important}}
+/* ---- cartelletta ---- */
+.cartella{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.cartella h2{margin:0;font:700 12px var(--f-display);letter-spacing:.22em;color:var(--violet);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cartella h2 small{font:400 12px var(--f-body);letter-spacing:0}
+.ct-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.ct-st{font:900 clamp(18px,3vw,30px) var(--f-display);letter-spacing:.12em;color:var(--dim)}
+.ct-st.rec{color:var(--rec);text-shadow:0 0 14px rgba(255,43,74,.55)}.ct-st.hold{color:var(--warn)}
+.ct-tc{font:700 clamp(30px,6vw,64px)/1 var(--f-mono);color:var(--cyan);margin-left:auto}
+.ct-row{display:flex;flex-direction:column;gap:2px;background:#02040a;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.ct-row small{font:700 10px var(--f-display);letter-spacing:.18em;color:var(--violet)}
+.ct-row b{font-size:clamp(18px,2.6vw,28px)}
+#ctNextIn{color:var(--warn);font-weight:600}
+.ct-btns{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ct-btns button{min-height:58px;font-size:16px;font-weight:700}
+.ct-btns button.big{min-height:76px;font-size:20px}
+.ct-btns button.rec{border-color:var(--rec);color:var(--rec)}
 </style>
 </head>
 <body>
@@ -492,7 +539,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V4.5.0</span>
+    <span class="ver" id="bootVer">V4.6.0</span>
   </div>
 </div>
 
@@ -500,11 +547,12 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V4.5.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V4.6.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
     <span class="pill" id="statePill">PRONTO</span>
+    <button id="dockBar" class="dockbar" hidden title="Finestre staccate da riaprire">↗ Riapri le finestre</button>
     <button id="installBtn" hidden>⤓ Installa app</button>
     <button id="devBtn">Dispositivi</button>
     <button id="tpBtn" aria-pressed="true">Teleprompter</button>
@@ -550,6 +598,14 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
       <div class="row"><button id="ptSave" class="main-act">Salva e torna alla lettura</button><button id="ptCancel">Annulla</button></div>
       <p class="note" id="ptInsNote"></p>
     </div>
+  </section>
+
+  <section class="cartella pnl" id="cartella" data-panel="cartella">
+    <h2>CARTELLETTA <span class="sp"></span><small class="note">il foglio del presentatore: staccala sul tablet ⧉</small></h2>
+    <div class="ct-top"><span class="ct-st" id="ctSt">PRONTO</span><span class="ct-tc" id="ctTc">00:00:00</span></div>
+    <div class="ct-row"><small>ADESSO SUONA</small><b id="ctNow">solo voce</b></div>
+    <div class="ct-row"><small>PROSSIMO SEGNALE NEL TESTO</small><b id="ctNext">—</b><span id="ctNextIn"></span></div>
+    <div class="ct-btns" id="ctBtns"></div>
   </section>
 
   <section class="vcard pnl" id="vcard" data-panel="video">
@@ -620,7 +676,7 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V4.5.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V4.6.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
@@ -798,6 +854,10 @@ canvas.pvv{width:100%;aspect-ratio:16/9;background:#000;border:1px solid var(--l
     <div class="laylist" id="layList"></div>
     <div class="row" id="layCols" hidden></div>
     <div class="row"><input id="layName" placeholder="Nome del nuovo set" aria-label="Nome del nuovo set" style="flex:1;min-width:0;background:#02040a;border:1px solid var(--line2);border-radius:8px;padding:8px 10px"><button id="laySave" class="main-act">Duplica con un nuovo nome</button></div>
+    <h3 style="font-size:13px">FINESTRE STACCATE (SECONDO MONITOR, TABLET)</h3>
+    <p class="note" style="margin:0">Ogni pannello ha in alto un bottoncino <b>⧉</b>: lo stacchi in un'altra finestra, che sposti sull'altro schermo (anche un tablet collegato come monitor). Più pannelli possono stare nella stessa finestra. Esempio: la regia su un monitor laterale e il teleprompter a tutto schermo su quello davanti. Ogni set ricorda le sue finestre: «Set fisso» e «Set portatile» possono essere diversi. Le scorciatoie da tastiera funzionano da tutte le finestre.</p>
+    <div id="dockList"></div>
+    <div class="row"><button id="dockAttachAll">↙ Riaggancia tutti i pannelli</button><button id="dockScreens" hidden title="Chrome chiede il permesso di gestire le finestre su più schermi">Riapri le finestre sullo schermo giusto</button></div>
     <h3 style="font-size:13px">SCORCIATOIE DA TASTIERA</h3>
     <p class="note" style="margin:0">Clicca il tasto accanto a un'azione e premi quello nuovo. Se è già usato, i due tasti si scambiano. I tasti 1–9 restano ai capitoli.</p>
     <div class="keylist" id="keyList"></div>

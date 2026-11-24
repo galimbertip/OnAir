@@ -7,6 +7,13 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.6.0 — 24/11/2026
+- Pannelli sganciabili: bottoncino ⧉ su ogni pannello per staccarlo in una finestra (secondo monitor, tablet come schermo), unirlo ad altri o riagganciarlo.
+- Teleprompter in finestra: tutto schermo, «Solo testo» (presentatore).
+- Nuovo pannello «Cartelletta» per il tablet: stato, tempo, cosa suona, prossimo segnale, pulsanti grandi.
+- Finestre ricordate per set di pannelli; «↗ Riapri le finestre» all'avvio; riaggancio automatico se la finestra si chiude; ricollegamento automatico se si ricarica la regia.
+- Disegno e webcam tenuti vivi dalle finestre staccate anche se la regia è coperta.
+
 ## V4.5.0 — 21/11/2026
 - «Segue le parole»: aggancio pesato (parole corte quasi ininfluenti), salti lunghi solo con 3+ parole vere confermate, scelta del candidato credibile più vicino, recupero se resta indietro o sbaglia punto.
 - Scorrimento fluido in proporzione alla riga letta, con avanzamento alla velocità di lettura tra un risultato e l'altro.

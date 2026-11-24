@@ -1,4 +1,4 @@
-# GPverse OnAir V4.5.0 — Come si usa
+# GPverse OnAir V4.6.0 — Come si usa
 
 ## Avvio
 **Consigliato: avvia sempre con `avvia_onair.sh`.** Se apri `index.html` con doppio clic il browser chiede microfono e webcam a ogni avvio e non lascia scegliere i dispositivi per nome.
@@ -56,6 +56,8 @@ Premi **TERMINA**: la registrazione si ferma subito e ti chiede conferma. Si apr
 **Inquadratura con green screen:** nel riquadro VIDEO premi «🎯 Scegli il verde» e clicca sul telo, poi «Green screen». Se si vede qualcosa oltre il telo, premi «✂ Scegli area» e trascina un rettangolo attorno a te e al telo: il resto diventa nero. Con «Ingrandisci area» l'area riempie lo schermo.
 
 **Togliere lo sfondo senza telo — modalità «Persone» (consigliata):** in «⚙ Regola» scegli «Persone» in «Togli lo sfondo senza telo». OnAir riconosce te e gli ospiti e toglie tutto il resto, senza registrare niente; funziona anche se la luce cambia o urti la webcam. Serve l'accelerazione grafica attiva nel browser.
+
+**Pannelli sganciabili (più monitor, tablet):** ogni pannello ha in alto un bottoncino **⧉**. Da lì lo stacchi in una nuova finestra (che trascini sull'altro monitor, o sul tablet collegato come secondo schermo), lo sposti in una finestra già aperta o lo riagganci alla regia. Esempio con due monitor: regia sul monitor laterale, teleprompter da solo sul monitor davanti, poi ⧉ → «Schermo intero» e «Solo testo» (i comandi ricompaiono muovendo il mouse). Il pannello **Cartelletta** (nascosto nella regia, si attiva da Impostazioni → Disposizione o staccandolo) è il foglio del presentatore: IN ONDA, tempo, cosa suona, prossimo segnale e pulsanti grandi da toccare. Ogni set di pannelli ricorda le sue finestre: crea un «Set fisso» e un «Set portatile» e all'avvio premi «↗ Riapri le finestre». Le scorciatoie funzionano da tutte le finestre. Il browser deve permettere i popup per il sito (la prima volta Chrome chiede il permesso con un'icona nella barra degli indirizzi); per riaprire le finestre direttamente sullo schermo giusto, in Impostazioni c'è «Riapri le finestre sullo schermo giusto».
 
 **Sigla video:** nel riquadro SIGLA premi «📂 Scegli» e scegli il video della sigla (mp4 o webm). Quando parte (tasto, segnale [SIGLA] o avvio della registrazione) il video va a tutto schermo nell'anteprima e nel video registrato per YouTube, a tempo con l'audio; finita la sigla l'immagine sfuma nella webcam. Se metti [SIGLA] in testa al testo, la puntata si apre direttamente sulla sigla. La musica la senti in cuffia e finisce nella puntata come sempre. Sotto l'anteprima vedi la forma d'onda con il cursore e, in giallo, la zona del titolo (dove la musica si abbassa: OnAir la trova da sola). Il conto alla rovescia ti dice «Titolo tra 3… 2… 1…» e poi «PARLA ORA». Se la zona non è giusta, a registrazione ferma fai partire la sigla e trascina sulla forma d'onda; doppio clic per tornare all'automatico.
 

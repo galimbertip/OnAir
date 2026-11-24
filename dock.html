@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OnAir · finestra</title>
+<link rel="icon" href="assets/icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* prima che la regia si colleghi (gli stili veri arrivano dalla regia) */
+  html,body{margin:0;height:100%;background:#04060b;color:#dfe9f5;font:15px system-ui,sans-serif}
+  #dockWait{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;color:#8aa0b4;line-height:1.5}
+  #dockWait[hidden]{display:none}
+</style>
+</head>
+<body class="dockwin">
+<div id="dockHost"></div>
+<div id="dockWait"><div><b style="color:#22e4ff;letter-spacing:.2em">GPVERSE ONAIR</b><br>Finestra staccata in attesa della regia…<br><small>Se la regia è chiusa, riaprila: questa finestra si ricollega da sola.</small></div></div>
+<script>
+/* Finestra staccata di OnAir: i pannelli veri vivono nella regia (window.opener) e vengono spostati qui.
+   Questa pagina non contiene logica dell'app: inoltra tasti, mouse, ridimensionamento e il ritmo di disegno alla regia. */
+(function () {
+  var D = null, host = document.getElementById('dockHost'), wait = document.getElementById('dockWait');
+  function reg() { try { var o = window.opener; return o && !o.closed && o.DOCK && o.DOCK.ready ? o.DOCK : null; } catch (e) { return null; } }
+  function check() {
+    var nd = reg();
+    if (nd !== D) {
+      // la regia è stata ricaricata o chiusa: i pannelli vecchi non funzionano più, si toglie tutto e si aspetta la nuova
+      if (D) { while (host.firstChild) host.removeChild(host.firstChild); }
+      D = nd;
+      if (D) { try { D.hello(window); } catch (e) { D = null; } }
+    }
+    wait.hidden = !!D && host.children.length > 0;
+  }
+  setInterval(check, 700); check();
+  function call(fn, a) { try { if (D && D[fn]) D[fn](window, a); } catch (e) { } }
+  document.addEventListener('keydown', function (e) { try { if (D && window.opener.onKeyMain) window.opener.onKeyMain(e); } catch (x) { } });
+  document.addEventListener('pointerdown', function (e) { call('onPointer', e); });
+  document.addEventListener('pointermove', function (e) { call('onMove', e); });
+  window.addEventListener('resize', function () { call('onResize'); });
+  window.addEventListener('pagehide', function () { call('bye'); D = null; });
+  document.addEventListener('fullscreenchange', function () { call('onResize'); });
+  // se la regia è coperta da un'altra finestra il browser rallenta il suo disegno: questa finestra lo tiene vivo
+  (function f() { try { if (D) D.tick(); } catch (e) { } requestAnimationFrame(f); })();
+})();
+</script>
+</body>
+</html>
