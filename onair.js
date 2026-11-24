@@ -3,9 +3,14 @@
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.6.0' };
+const APP = { name: 'GPverse OnAir', version: '4.7.0' };
 
 const CHANGELOG = [
+  { v: '4.7.0', date: '24/11/2026', title: 'Controllo della pronuncia mentre leggi', items: [
+    'In «Segue le parole»: la parola appena sentita è evidenziata, quelle capite diventano verdi, quelle non capite rosse e sottolineate (anche le parole saltate a metà frase).',
+    'Indicatore 🎙 Chiarezza % · parole al minuto (misurate mentre parli, senza le pause). Sulla riga di lettura compare «RALLENTA» se vai troppo veloce o «SCANDISCI» se le ultime parole non arrivano.',
+    'Clic sull\'indicatore: resoconto con chiarezza, ritmo, frasi dove hai accelerato, frasi che si capiscono meno, parole capite peggio e il confronto tra parole con e senza R. Il resoconto resta nella puntata (Sessioni → «🎙 chiarezza»).',
+    'Corretto: con le frecce il testo tornava avanti da solo e, scendendo con le frecce, poteva partire lo stacchetto dopo (difetto della 4.4.2–4.6.0). Ora spostando il testo a mano nessun segnale parte.' ] },
   { v: '4.6.0', date: '24/11/2026', title: 'Pannelli sganciabili: regia su un monitor, teleprompter sull\'altro', items: [
     'Ogni pannello ha in alto un bottoncino ⧉: lo stacchi in un\'altra finestra da spostare sul secondo monitor o sul tablet collegato come schermo, e lo riagganci quando vuoi.',
     'Più pannelli nella stessa finestra (es. teleprompter + mixer). Il teleprompter da solo occupa tutta la finestra: «Schermo intero» e «Solo testo» (modalità presentatore, i comandi ricompaiono muovendo il mouse).',
@@ -859,6 +864,7 @@ async function recFinish() {
   for (const s of R.session.segs) { if (s.tEnd == null || s.tEnd > R.len / E.sr) s.tEnd = R.len / E.sr; delete s.byHold; }
   clearInterval(R.autosave);
   R.session.status = 'done';
+  if (TP.mode === 'follow' || TP.wantFollow) { const d = DIC.summary(); if (d) R.session.diction = d; }
   await persistSession();
   const sid = R.session.id;
   R.session = null; R.state = 'idle'; R.fromFrame = Infinity;
@@ -2280,7 +2286,7 @@ const VF = {
   rec: null, on: false, words: [], pos: 0, target: null, err: null, readTo: 0, ok: new Set(), lastHeard: 0,
   supported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
   index() {
-    if (!TP.el) return; this.words = []; this.ok = new Set();
+    if (!TP.el) return; this.words = []; this.ok = new Set(); this.curEl = null;
     // ogni segnale sa quante parole lo precedono: così parte quando hai letto la frase prima, anche in anticipo sulla riga
     for (const el of TP.el.querySelectorAll('.w, .cue')) { if (el.classList.contains('cue')) el.dataset.wi = String(this.words.length); else this.words.push({ el, n: normW(el.textContent) }); }
     this.resync();
@@ -2288,7 +2294,7 @@ const VF = {
   resync() {
     if (!TP.view || !this.words.length) { this.pos = 0; this.target = null; return; }
     const y = TP.view.scrollTop + TP.lineY() - 2; let i = this.words.findIndex(w => w.el.offsetTop + w.el.offsetHeight > y); if (i < 0) i = this.words.length;
-    this.pos = i; this.vpos = i; this.target = null; this.pendJump = null; this.mark(i); this.score();
+    this.pos = i; this.vpos = i; this.uttFrom = i; this.heardPos = null; this.target = null; this.pendJump = null; this.mark(i); this.score();
   },
   mark(i) {
     const a = Math.min(this.readTo, i), b = Math.max(this.readTo, i);
@@ -2369,21 +2375,25 @@ const VF = {
     this.pendJump = null;
     const from = this.pos;
     // dizione: allinea le ultime parole dette al testo; quelle del testo che il riconoscimento non ha sentito sono «mangiate»
-    { let i = said.length - 1, j = best; const stop = Math.max(0, Math.min(from, best) - 3), lim = Math.max(stop, best - 25);
+    // la frase in corso è cominciata a «uttFrom» (dopo l'ultimo risultato definitivo): si controlla tutta, non solo le ultime parole
+    if (this.uttFrom == null || this.uttFrom > best + 1 || best + 1 - this.uttFrom > 40) this.uttFrom = Math.max(0, Math.min(from, best + 1) - 1);
+    { let i = said.length - 1, j = best; const stop = Math.max(0, Math.min(this.uttFrom, best) - 2), lim = Math.max(stop, best - 40);
       while (i >= 0 && j >= lim) {
-        if (sim(said[i], W[j].n) > 0) { this.ok.add(j); W[j].el.classList.remove('miss'); i--; j--; }
+        if (sim(said[i], W[j].n) > 0) { this.ok.add(j); W[j].el.classList.remove('miss'); W[j].el.classList.add('ok'); i--; j--; }
         else if (j - 1 >= lim && sim(said[i], W[j - 1].n) > 0) j--;
         else if (j - 2 >= lim && sim(said[i], W[j - 2].n) > 0) j -= 2;
         else if (i - 1 >= 0 && sim(said[i - 1], W[j].n) > 0) i--;
         else { i--; j--; }
       }
       // solo a frase chiusa (risultato definitivo) si segna una parola come mangiata
-      if (fin) for (let k = Math.max(0, from - 1); k <= best; k++) if (!this.ok.has(k) && W[k].n.length > 2) W[k].el.classList.add('miss'); }
+      if (fin) { for (let k = Math.max(0, this.uttFrom); k <= best; k++) if (!this.ok.has(k) && W[k].n.length > 2) W[k].el.classList.add('miss'); this.uttFrom = best + 1; } }
     // velocità di lettura (parole al secondo), per far scorrere il testo con fluidità tra un risultato e l'altro
     const now0 = performance.now();
     if (this.lastHit && step > 0 && step <= 12) { const r = step / Math.max(0.15, (now0 - this.lastHit) / 1000); this.rate = this.rate ? this.rate * 0.75 + Math.min(5, r) * 0.25 : Math.min(4, r); }
+    if (step > 0 && step <= 12 && this.lastHit) DIC.step(step, (now0 - this.lastHit) / 1000, best + 1);
     if (step !== 0) this.lastHit = now0;
-    this.pos = best + 1; this.target = W[best].el; this.mark(this.pos); this.score();
+    if (this.curEl) this.curEl.classList.remove('cur'); this.curEl = W[best].el; this.curEl.classList.add('cur');
+    this.pos = best + 1; this.heardPos = this.pos; this.target = W[best].el; this.mark(this.pos); this.score();
     if (step < 0 || step > 12 || this.vpos == null) this.vpos = this.pos; else this.vpos = Math.max(this.pos - 0.3, Math.min(this.vpos, this.pos + 1.5));
     TP.cuesByWords();
   },
@@ -2399,16 +2409,82 @@ const VF = {
     const rw = Math.max(1, TP.el.clientWidth), y = (k) => { const el = W[Math.min(W.length - 1, k)].el; return el.offsetTop + Math.min(1, el.offsetLeft / rw) * el.offsetHeight; };
     const a = y(i), b = i + 1 < W.length ? y(i + 1) : a + W[i].el.offsetHeight * 0.3; return a + (b - a) * f;
   },
-  /* Dizione: percentuale di parole capite nelle ultime ~40 lette */
+  /* Controllo pronuncia dal vivo: chiarezza (parole capite nelle ultime ~40) e ritmo (parole al minuto mentre parli) */
   score() {
     const el = $('ptDiction'); if (!el) return;
     if (TP.wantFollow && this.err) { el.hidden = false; el.textContent = '⚠ Non sento le parole: ' + this.err + ' · clic per riprovare'; el.className = 'grp dic bad'; el.title = 'Il riconoscimento vocale di Chrome si è interrotto: per ora il testo scorre quando parli. Clic per riprovare'; return; }
-    const show = TP.mode === 'follow' && this.on; el.hidden = !show; if (!show) return;
-    const a = Math.max(0, this.pos - 40); let tot = 0, ok = 0;
-    for (let k = a; k < this.pos; k++) { if (this.words[k].n.length <= 2) continue; tot++; if (!this.words[k].el.classList.contains('miss')) ok++; }
-    if (tot < 8) { el.textContent = 'Dizione —'; el.className = 'grp dic'; el.title = 'Leggi ancora qualche frase: misuro quante parole arrivano chiare'; return; }
-    const p = Math.round(ok / tot * 100); el.textContent = 'Dizione ' + p + '%'; el.className = 'grp dic ' + (p >= 90 ? 'good' : p >= 75 ? 'mid' : 'bad');
-    el.title = p >= 90 ? 'Le parole arrivano chiare' : p >= 75 ? 'Qualche parola non si capisce: sono sottolineate in rosso' : 'Molte parole non si capiscono: rallenta e scandisci';
+    const show = TP.mode === 'follow' && (this.on || DIC.n() > 0); el.hidden = !show; if (!show) return;
+    const cl = DIC.clarity(this.pos - 40, this.pos), wpm = DIC.wpm();
+    if (cl == null) { el.textContent = '🎙 Pronuncia —'; el.className = 'grp dic'; el.title = 'Leggi qualche frase: misuro quante parole arrivano chiare e a che ritmo parli. Clic: resoconto'; DIC.coach(null); return; }
+    const pc = Math.round(cl * 100), lv = (pc >= 90 ? 0 : pc >= 75 ? 1 : 2), sv = wpm == null ? 0 : wpm > DIC.fast + 20 ? 2 : wpm > DIC.fast ? 1 : 0;
+    el.textContent = `🎙 Chiarezza ${pc}%` + (wpm ? ` · ${wpm} p/min` : ''); el.className = 'grp dic ' + ['good', 'mid', 'bad'][Math.max(lv, sv)];
+    el.title = (lv === 0 ? 'Le parole arrivano chiare. ' : lv === 1 ? 'Qualche parola non si capisce (sottolineata in rosso). ' : 'Molte parole non si capiscono: rallenta e scandisci. ')
+      + (wpm ? (sv === 0 ? `Ritmo buono (${wpm} parole al minuto).` : `Stai andando veloce: ${wpm} parole al minuto, prova a stare sotto ${DIC.fast}.`) : '') + ' Clic: resoconto completo';
+    const near = DIC.clarity(this.pos - 15, this.pos);
+    DIC.coach(sv === 2 || (sv === 1 && wpm > DIC.fast + 10) ? 'RALLENTA' : near != null && near < 0.7 ? 'SCANDISCI' : null);
+  }
+};
+/* ------------------------------------------------ Dizione: statistiche della lettura e resoconto
+   Misura quello che il riconoscimento vocale di Chrome capisce: è un buon indicatore di quanto sei comprensibile,
+   non un giudizio fonetico (non «sente» la R moscia o l'accento, sente se la parola arriva). */
+const DIC = {
+  fast: 165, from: 0, to: 0, pace: [], peaks: [], t0: 0,
+  reset() { this.from = VF.pos || 0; this.to = this.from; this.pace = []; this.peaks = []; this.t0 = Date.now(); for (const w of VF.words) w.el.classList.remove('ok', 'miss'); VF.ok = new Set(); },
+  n() { return Math.max(0, this.to - this.from); },
+  step(words, dt, pos) {
+    this.to = Math.max(this.to, pos);
+    if (dt > 2.5 || dt <= 0) return; // dopo una pausa non si misura il ritmo
+    this.pace.push({ words, dt, pos }); if (this.pace.length > 400) this.pace.shift();
+    const w = this.wpm(); if (w && w > this.fast + 20) this.peaks.push({ pos, wpm: w });
+  },
+  wpm(from) { const P = this.pace.slice(-10); if (P.length < 4) return null; let a = 0, t = 0; for (const x of P) { a += x.words; t += x.dt; } return t > 0 ? Math.round(a / t * 60) : null; },
+  clarity(a, b) { const W = VF.words; let tot = 0, ok = 0; for (let k = Math.max(this.from, a); k < Math.min(b, W.length); k++) { if (W[k].n.length <= 2) continue; tot++; if (!W[k].el.classList.contains('miss')) ok++; } return tot >= 8 ? ok / tot : null; },
+  coach(msg) {
+    const el = $('ptCoach'); if (!el) return; clearTimeout(this.coachT);
+    if (!msg || S.settings.dicLive === false) { el.hidden = true; return; }
+    el.textContent = msg === 'RALLENTA' ? '🐢 RALLENTA' : '🗣 SCANDISCI'; el.hidden = false; this.coachT = setTimeout(() => { el.hidden = true; }, 3500);
+  },
+  /* riassunto per il resoconto (e per la sessione) */
+  summary() {
+    const W = VF.words, a = this.from, b = Math.min(this.to, W.length); if (b - a < 20) return null;
+    let tot = 0, ok = 0, rT = 0, rM = 0, nT = 0, nM = 0; const miss = new Map(), sent = []; let cur = { w: [], m: 0 };
+    for (let k = a; k < b; k++) {
+      const el = W[k].el, txt = el.textContent.replace(/[«»"“”()]/g, ''), m = el.classList.contains('miss'); cur.w.push(m ? '⟨' + txt.replace(/[.,;:!?]+$/, '') + '⟩' + (txt.match(/[.,;:!?]+$/) || [''])[0] : txt); if (m) cur.m++;
+      if (W[k].n.length > 2) { tot++; if (!m) ok++; const hasR = /r/.test(W[k].n); if (hasR) { rT++; if (m) rM++; } else { nT++; if (m) nM++; }
+        if (m) { const key = txt.replace(/[.,;:!?]+$/, '').toLowerCase(); miss.set(key, (miss.get(key) || 0) + 1); } }
+      if (/[.!?:;]$/.test(txt) || k === b - 1) { if (cur.w.length) sent.push(cur); cur = { w: [], m: 0 }; }
+    }
+    const P = this.pace; let wA = 0, tA = 0; for (const x of P) { wA += x.words; tA += x.dt; }
+    // tratti veloci: la frase dove il ritmo ha superato di molto il limite
+    const fastS = []; for (const pk of this.peaks) { let k = pk.pos - 1, st = k; while (st > a && !/[.!?:;]$/.test(W[st - 1].el.textContent)) st--; let en = k; while (en < b - 1 && !/[.!?:;]$/.test(W[en].el.textContent)) en++;
+      const t = W.slice(st, en + 1).map(x => x.el.textContent).join(' '); if (en - st >= 3 && !fastS.some(f => f.t === t)) fastS.push({ t, wpm: pk.wpm }); }
+    return { when: Date.now(), words: b - a, clarity: tot ? Math.round(ok / tot * 100) : null, wpm: tA > 5 ? Math.round(wA / tA * 60) : null, fast: this.fast,
+      rPct: rT >= 15 && nT >= 15 ? [Math.round(rM / rT * 100), Math.round(nM / nT * 100)] : null,
+      miss: [...miss].sort((x, y) => y[1] - x[1]).slice(0, 15), worst: sent.filter(x => x.m >= 2).sort((x, y) => y.m - x.m).slice(0, 4).map(x => x.w.join(' ')),
+      fastS: fastS.sort((x, y) => y.wpm - x.wpm).slice(0, 3) };
+  },
+  /* finestra del resoconto */
+  show(sum, title) {
+    const m = $('dicModal'), b = $('dicBody'); sum = sum || this.summary(); $('dicTitle').textContent = title || 'COME STAI LEGGENDO';
+    const esc = (t) => String(t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    if (!sum) { b.innerHTML = '<p class="note">Ancora troppo poco: in «Segue le parole» leggi almeno qualche frase (anche senza registrare: premi P per far partire il testo).</p>'; }
+    else {
+      const cl = sum.clarity, w = sum.wpm, f = sum.fast || this.fast;
+      const clMsg = cl >= 90 ? 'si capisce bene' : cl >= 80 ? 'si capisce, con qualche parola persa' : cl >= 65 ? 'diverse parole non arrivano' : 'molte parole non arrivano';
+      const wMsg = w == null ? '' : w > f + 20 ? 'troppo veloce' : w > f ? 'un po\' veloce' : w < 110 ? 'calmo' : 'buono';
+      let h = `<div class="dic-kpi"><div><small>CHIAREZZA</small><b class="${cl >= 90 ? 'good' : cl >= 75 ? 'mid' : 'bad'}">${cl}%</b><span>${clMsg}</span></div>`
+        + `<div><small>RITMO</small><b class="${w == null ? '' : w > f + 20 ? 'bad' : w > f ? 'mid' : 'good'}">${w == null ? '—' : w}</b><span>${w == null ? 'troppo poco per misurarlo' : 'parole al minuto · ' + wMsg + ' (meglio sotto ' + f + ')'}</span></div>`
+        + `<div><small>PAROLE LETTE</small><b>${sum.words}</b><span>${new Date(sum.when).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div></div>`;
+      if (sum.rPct) { const [r, n] = sum.rPct; h += `<p class="dic-r">${r > n * 1.5 && r - n >= 5 ? '⚠ ' : ''}Parole con la <b>R</b>: non capite il ${r}% · parole senza R: ${n}%. ${r > n * 1.5 && r - n >= 5 ? 'Le parole con la R ti costano di più: lì vale la pena rallentare un attimo.' : 'Nessuna differenza importante: la R non è il problema principale.'}</p>`; }
+      if (sum.fastS && sum.fastS.length) h += '<h4>Dove hai accelerato</h4>' + sum.fastS.map(x => `<p class="dic-s"><b>${x.wpm} p/min</b> ${esc(x.t)}</p>`).join('');
+      if (sum.worst && sum.worst.length) h += '<h4>Frasi che si capiscono meno</h4><p class="note" style="margin:0 0 4px">Tra ⟨ ⟩ le parole che non sono arrivate.</p>' + sum.worst.map(x => `<p class="dic-s">${esc(x)}</p>`).join('');
+      if (sum.miss && sum.miss.length) h += '<h4>Parole capite peggio</h4><div class="dic-miss">' + sum.miss.map(([k, n]) => `<span>${esc(k)}${n > 1 ? ' <b>×' + n + '</b>' : ''}</span>`).join('') + '</div>';
+      if (!(sum.worst && sum.worst.length) && !(sum.miss && sum.miss.length)) h += '<p class="note">Nessuna parola persa: ottimo.</p>';
+      b.innerHTML = h;
+    }
+    $('dicLive').setAttribute('aria-pressed', String(S.settings.dicLive !== false));
+    const d = (!title && $('ptDiction') ? $('ptDiction').ownerDocument : document); d.body.append(d.adoptNode(m)); // in primo piano, nella finestra dove stai leggendo
+    m.hidden = false;
   }
 };
 /* Segnali nel testo: [NOME] e [STOP NOME] per ogni categoria (con il numero per gli stacchetti: [CAPITOLO 3]), più [PAUSA] e [ISCRIVITI] */
@@ -2432,6 +2508,7 @@ const TP = {
     // ogni parola in uno <span class="w">: serve al teleprompter che segue la voce
     const plain = (t) => esc(t).replace(/[^\s]+/g, (w) => `<span class="w">${w}</span>`).replace(/\n/g, '<br>');
     const re = cueRe();
+    this.el.classList.toggle('nodic', S.settings.dicLive === false);
     this.el.innerHTML = paras.map(p => {
       let out = '', i = 0;
       for (const m of p.matchAll(re)) {
@@ -2476,14 +2553,15 @@ const TP = {
       this.push -= step; if (Math.abs(this.push) < 0.5) this.push = 0;
       this.acc = Math.max(0, this.acc + step); this.view.scrollTop = this.acc; this.expect = this.view.scrollTop;
       if (step < 0) this.syncFired();
-      if (!this.push) VF.resync();
+      if (!this.push) { VF.resync(); this.manualT = performance.now(); }
     }
+    const manual = !!this.push || performance.now() - (this.manualT || 0) < 400; // stai spostando il testo a mano
     const follow = this.mode === 'follow';
     if (follow && this.running && !VF.on) VF.start(); else if (VF.on && (!follow || !this.running)) VF.stop();
     if (this.running && follow) {
       // segue le parole riconosciute: la parola appena letta va verso la riga di lettura
       // fluido: tra un risultato e l'altro, mentre parli, va avanti alla tua velocità (al massimo 1,5 parole oltre l'ultima sentita)
-      if (VF.vpos != null && VF.words.length) {
+      if (VF.vpos != null && VF.words.length && !manual) { // mentre sposti il testo a mano non lo si tira indietro
         const talking = VAD.speaking(t) || performance.now() - VF.lastHeard < 1300;
         if (talking && VF.rate) VF.vpos = Math.min(VF.creepCap(), VF.vpos + VF.rate * 0.9 * dt);
         if (VF.vpos < VF.pos - 0.3) VF.vpos = VF.pos - 0.3;
@@ -2503,7 +2581,7 @@ const TP = {
       for (const c of this.cues) {
         const y = this.cueY(c);
         if (c.dataset.pre === '1') { if (y <= ly) delete c.dataset.pre; continue; }
-        if (c.dataset.fired !== '1' && y <= ly) { c.dataset.fired = '1'; this.fire(c); }
+        if (c.dataset.fired !== '1' && y <= ly) { c.dataset.fired = '1'; if (!manual) this.fire(c); } // superato a mano (frecce, rotella): non parte
         else if (c.dataset.fired === '1' && y > ly + 4) c.dataset.fired = '0';
       }
     }
@@ -2516,10 +2594,12 @@ const TP = {
     for (const c of this.cues) {
       if (c.dataset.fired === '1' || c.dataset.wi == null) continue;
       const wi = +c.dataset.wi, need = silent ? Math.max(1, wi - 2) : wi; // in pausa bastano tutte le parole tranne le ultime 2
-      if (VF.pos >= need && VF.pos <= wi + 2) {
+      // contano solo le parole SENTITE: spostando il testo con frecce o rotella vicino a un segnale, il segnale non parte
+      const at = silent ? VF.heardPos : VF.pos;
+      if (at != null && at >= need && at <= wi + 2) {
         c.dataset.fired = '1'; if (this.cueY(c) > ly) c.dataset.pre = '1'; this.fire(c);
         // il testo si porta subito dopo l'etichetta: sulla riga di lettura c'è la frase che viene dopo
-        const nx = VF.words[wi]; if (nx) { VF.pos = wi; VF.vpos = wi; VF.target = nx.el; VF.mark(wi); }
+        const nx = VF.words[wi]; if (nx) { VF.pos = wi; VF.vpos = wi; VF.uttFrom = wi; VF.target = nx.el; VF.mark(wi); }
       }
     }
   },
@@ -2544,8 +2624,9 @@ const TP = {
     }
   },
   // scorrimento a mano (rotella, barra): «Segue le parole» riparte da lì invece di riportare il testo dov'era
-  onScroll() { if (Math.abs(this.view.scrollTop - this.expect) > 2) { this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); if (this.mode === 'follow') VF.resync(); } },
+  onScroll() { if (Math.abs(this.view.scrollTop - this.expect) > 2) { this.manualT = performance.now(); this.acc = this.view.scrollTop; this.expect = this.view.scrollTop; this.syncFired(); if (this.mode === 'follow') VF.resync(); } },
   onRecStart() {
+    DIC.reset(); // il resoconto della dizione riguarda questa registrazione
     this.syncFired();
     // segnali appena sopra la riga di lettura (es. [SIGLA] prima del titolo): sono «adesso», quindi partono con la registrazione
     if (this.auto) {
@@ -2912,9 +2993,10 @@ async function openSessions(selId) {
     const dur = sessDur(s);
     const missing = [...new Set(s.segs.map(g => g.fileId))].filter(id => !S.names.has(id));
     el.innerHTML = `<div class="row"><input aria-label="Nome sessione" style="flex:1;min-width:0"><button class="go-mix main-act">Ascolta, mixa ed esporta</button><button class="xfer" title="Salva la sessione in un file .onair per aprirla su un altro dispositivo">⬇ Trasferisci</button><button class="del danger">Elimina</button></div>
-      <div class="meta"><span>${new Date(s.created).toLocaleString('it-IT')}</span><span>${fmt(dur, false)}</span><span>re-take: ${s.retakes}</span><span>${s.video && s.video.nGroups ? 'audio + video ' + s.video.h + 'p' : 'solo audio'}</span><span>${s.status === 'done' ? 'completa' : 'interrotta (recuperata)'}</span></div>
+      <div class="meta"><span>${new Date(s.created).toLocaleString('it-IT')}</span><span>${fmt(dur, false)}</span><span>re-take: ${s.retakes}</span><span>${s.video && s.video.nGroups ? 'audio + video ' + s.video.h + 'p' : 'solo audio'}</span><span>${s.status === 'done' ? 'completa' : 'interrotta (recuperata)'}</span>${s.diction ? `<button type="button" class="dicbtn" data-dic="${s.id}" title="Resoconto della pronuncia di questa puntata">🎙 chiarezza ${s.diction.clarity}%${s.diction.wpm ? ' · ' + s.diction.wpm + ' p/min' : ''}</button>` : ''}</div>
       ${missing.length ? `<span class="note">Attenzione: ${missing.length} file musicali non sono più nella libreria e mancheranno nel mix.</span>` : ''}
       <div class="exp" hidden></div>`;
+    const db = el.querySelector('.dicbtn'); if (db) db.addEventListener('click', () => DIC.show(s.diction, 'PRONUNCIA · ' + (s.name || 'puntata').toUpperCase()));
     const inp = el.querySelector('input'); inp.value = s.name;
     inp.addEventListener('change', async () => { s.name = inp.value.trim() || s.name; await DB.put('sessions', s.id, s); });
     const del = el.querySelector('.del'); let armed = false;
@@ -4111,7 +4193,9 @@ function wire() {
   window.addEventListener('resize', () => { const y = TP.view.scrollTop; TP.layout(); TP.setTop(y); });
   $('ptRun').addEventListener('click', () => TP.toggle());
   $('ptStart').addEventListener('change', (e) => { TP.startMode = e.target.value; TP.save(); });
-  $('ptDiction').addEventListener('click', () => { if (TP.wantFollow) VF.retryNow(); });
+  $('ptDiction').addEventListener('click', () => { if (TP.wantFollow && VF.err) VF.retryNow(); else DIC.show(); });
+  $('dicLive').addEventListener('click', () => { S.settings.dicLive = S.settings.dicLive === false; saveSettings(); $('dicLive').setAttribute('aria-pressed', String(S.settings.dicLive !== false)); TP.el.classList.toggle('nodic', S.settings.dicLive === false); if (S.settings.dicLive === false) DIC.coach(null); });
+  $('dicReset').addEventListener('click', () => { DIC.reset(); VF.score(); DIC.show(); });
   $('ptMode').addEventListener('change', (e) => { TP.wantFollow = false; VF.err = null; VF.tries = 0; TP.mode = e.target.value; TP.save(); TP.layout(); if (TP.mode === 'follow' && !VF.supported()) VF.fail('il browser non ha il riconoscimento vocale'); });
   $('helpBtn').addEventListener('click', () => HELP.toggle());
   $('helpPip').addEventListener('click', async () => { if (!(await HELP.openPip())) toast('Il browser ha bloccato la finestra: consenti i popup per questo sito'); else $('helpModal').hidden = true; });

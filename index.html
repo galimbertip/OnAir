@@ -204,6 +204,26 @@ body.wide .vcard.adj>.vctl{display:flex;position:absolute;left:8px;right:8px;top
 @media (max-width:820px){.catrow{grid-template-columns:34px 1fr 1fr}}
 .pt-text .w.rd{color:#8aa0b4}
 .pt-text .w.miss{text-decoration:underline wavy #ff2b4a;text-decoration-thickness:2px;text-underline-offset:.18em}
+/* controllo pronuncia: parola appena sentita, parole capite (verde), non capite (rosso) */
+.pt-text .w.rd.ok{color:#8fe3b0}
+.pt-text .w.rd.miss{color:#ff9aa8}
+.pt-text .w.cur{background:rgba(34,228,255,.22);border-radius:6px;box-shadow:0 0 0 3px rgba(34,228,255,.22);color:#fff}
+.pt-text.nodic .w.rd.ok,.pt-text.nodic .w.rd.miss{color:#8aa0b4}.pt-text.nodic .w.miss{text-decoration:none}.pt-text.nodic .w.cur{background:none;box-shadow:none;color:inherit}
+.pt-coach{position:absolute;right:14px;top:-2.4em;font:900 15px var(--f-display);letter-spacing:.14em;padding:5px 12px;border-radius:8px;background:#ffc04a;color:#111;box-shadow:0 4px 18px rgba(0,0,0,.5);animation:sigpulse 1s ease-in-out infinite}
+.pt-coach[hidden]{display:none}
+button.dic{cursor:pointer;background:none;min-height:0}
+.dicbtn{padding:2px 9px;min-height:0;font-size:12px;border-radius:999px}
+.dic-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 10px}
+.dic-kpi>div{background:#02040a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.dic-kpi small{font:700 10px var(--f-display);letter-spacing:.18em;color:var(--violet)}
+.dic-kpi b{font:700 30px var(--f-mono)}.dic-kpi b.good{color:#2cff9a}.dic-kpi b.mid{color:#ffe600}.dic-kpi b.bad{color:#ff2b4a}
+.dic-kpi span{font-size:12px;color:var(--dim)}
+#dicBody h4{margin:14px 0 6px;font:700 12px var(--f-display);letter-spacing:.16em;color:var(--violet)}
+.dic-s{margin:4px 0;padding:8px 10px;background:#02040a;border-left:3px solid var(--line2);border-radius:6px;line-height:1.45}
+.dic-s b{color:var(--warn);margin-right:6px}
+.dic-r{padding:8px 10px;border:1px solid var(--line2);border-radius:8px}
+.dic-miss{display:flex;flex-wrap:wrap;gap:6px}.dic-miss span{padding:3px 9px;border-radius:999px;border:1px solid #ff2b4a55;color:#ff9aa8}.dic-miss b{color:#ff2b4a}
+@media (max-width:640px){.dic-kpi{grid-template-columns:1fr}}
 .dic{font:700 12px var(--f-mono,monospace);padding:4px 10px;border-radius:8px;border:1px solid var(--line2)}
 .dic.bad{cursor:pointer}
 .dic.good{color:#2cff9a;border-color:#2cff9a}.dic.mid{color:#ffe600;border-color:#ffe600}.dic.bad{color:#ff2b4a;border-color:#ff2b4a}
@@ -539,7 +559,7 @@ body.tponly.showbar #dockHost>.prompter .pt-bar{display:flex;position:fixed;top:
     <p>Studio di registrazione per il podcast. Usa le cuffie: il microfono deve sentire solo la tua voce, la musica la mixa OnAir.</p>
     <button id="bootBtn" class="btn-big">ACCENDI LO STUDIO</button>
     <div id="bootErr" class="err" hidden></div>
-    <span class="ver" id="bootVer">V4.6.0</span>
+    <span class="ver" id="bootVer">V4.7.0</span>
   </div>
 </div>
 
@@ -547,7 +567,7 @@ body.tponly.showbar #dockHost>.prompter .pt-bar{display:flex;position:fixed;top:
   <header class="top">
     <img class="logo" src="assets/logo.jpg" alt="">
     <div class="brand"><small>GPVERSE</small><b>OnAir</b></div>
-    <button class="ver" id="verBtn" title="Novità di questa versione">V4.6.0</button>
+    <button class="ver" id="verBtn" title="Novità di questa versione">V4.7.0</button>
     <span class="sp"></span>
     <span class="pill click" id="micPill" title="Controllo dispositivi">MIC</span>
     <span class="pill click" id="camPill" title="Controllo dispositivi">CAM</span>
@@ -575,7 +595,7 @@ body.tponly.showbar #dockHost>.prompter .pt-bar{display:flex;position:fixed;top:
     <div class="pt-bar">
       <h2>TELEPROMPTER</h2>
       <button id="ptRun" title="Avvia o ferma lo scorrimento">⏯ Scorri<span class="kbd" data-act="tpRun">P</span></button>
-      <span class="grp dic" id="ptDiction" hidden title="Quante parole arrivano chiare">Dizione —</span>
+      <button type="button" class="grp dic" id="ptDiction" hidden title="Controllo pronuncia: quante parole arrivano chiare e a che ritmo parli. Clic: resoconto">🎙 Pronuncia —</button>
       <select id="ptMode" aria-label="Come scorre il testo" title="Come scorre il testo (tasto M)"><option value="fixed">Velocità fissa</option><option value="voice">Scorre quando parlo</option><option value="follow">Segue le parole che leggo</option></select>
       <select id="ptStart" aria-label="Quando parte il testo" title="Quando parte lo scorrimento"><option value="intro">Parte dopo la sigla</option><option value="rec">Parte con la registrazione</option><option value="manual">Parte a mano</option></select>
       <span class="grp" id="ptSpeedGrp" title="Velocità (Maiusc + frecce su e giù)">Velocità <button id="ptSlow" aria-label="Più lento">−</button><output id="ptSpeed">6</output><button id="ptFast" aria-label="Più veloce">+</button></span>
@@ -587,7 +607,7 @@ body.tponly.showbar #dockHost>.prompter .pt-bar{display:flex;position:fixed;top:
       <button id="ptLoad">📂 Carica .txt</button>
     </div>
     <div class="pt-view" id="ptView">
-      <div class="pt-line"></div>
+      <div class="pt-line"><div class="pt-coach" id="ptCoach" hidden></div></div>
       <div class="pt-text" id="ptText"></div>
       <div class="pt-empty" id="ptEmpty" hidden><div><p>Nessun testo. Incolla la scaletta o il testo della puntata con <b>✎ Modifica testo</b>, oppure carica un file .txt.</p><p class="note">Nel testo puoi mettere i segnali [SIGLA], [SOTTOFONDO], [CAPITOLO]: quando la riga di lettura li raggiunge, OnAir li lancia da solo.</p></div></div>
     </div>
@@ -676,10 +696,18 @@ body.tponly.showbar #dockHost>.prompter .pt-bar{display:flex;position:fixed;top:
   </div>
 
   <div class="keys" id="keysLegend"></div>
-  <div class="foot"><span>GPverse OnAir · <span id="footVer">V4.6.0</span></span><span id="footInfo"></span></div>
+  <div class="foot"><span>GPverse OnAir · <span id="footVer">V4.7.0</span></span><span id="footInfo"></span></div>
 </div>
 
 <!-- Pausa / Re-take -->
+<div class="modal" id="dicModal" hidden>
+  <div class="sheet" role="dialog" aria-labelledby="dicTitle" style="max-width:760px">
+    <h3><span id="dicTitle">COME STAI LEGGENDO</span> <span class="sp"></span><button class="x" data-close="dicModal">Chiudi</button></h3>
+    <p class="note" style="margin-top:0">Misura quello che il riconoscimento vocale capisce di te: se una parola arriva a lui, di solito arriva anche a chi ascolta. Non giudica l'accento o la R moscia in sé, ma ti dice dove la voce non passa e dove vai troppo veloce.</p>
+    <div id="dicBody"></div>
+    <div class="row" style="margin-top:12px"><button class="switch" id="dicLive" aria-pressed="true" title="Parola sentita evidenziata, parole capite in verde, non capite sottolineate in rosso, avvisi RALLENTA / SCANDISCI">Controllo mentre leggo</button><button id="dicReset" title="Azzera le statistiche e ricomincia a misurare da qui">↺ Ricomincia a misurare</button><span class="sp"></span><span class="note">Per allenarti senza registrare: «Segue le parole» e premi P.</span></div>
+  </div>
+</div>
 <div class="modal" id="holdModal" hidden>
   <div class="sheet" role="dialog" aria-labelledby="holdTitle">
     <h3 id="holdTitle">RE-TAKE</h3>

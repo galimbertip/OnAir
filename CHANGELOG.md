@@ -7,6 +7,11 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.7.0 — 24/11/2026
+- Controllo pronuncia dal vivo in «Segue le parole»: parola sentita evidenziata, capite in verde, non capite in rosso (anche quelle saltate a metà frase), indicatore chiarezza + parole al minuto, avvisi RALLENTA / SCANDISCI.
+- Resoconto della pronuncia (anche salvato nella puntata): frasi veloci, frasi meno chiare, parole capite peggio, confronto parole con/senza R.
+- Corretto: frecce che venivano annullate dallo scorrimento automatico e stacchetti che partivano scendendo con le frecce (dalla 4.4.2).
+
 ## V4.6.0 — 24/11/2026
 - Pannelli sganciabili: bottoncino ⧉ su ogni pannello per staccarlo in una finestra (secondo monitor, tablet come schermo), unirlo ad altri o riagganciarlo.
 - Teleprompter in finestra: tutto schermo, «Solo testo» (presentatore).
