@@ -7,6 +7,9 @@ Schema: **V.maior.minor.patch**
 
 La versione è visibile nell'app (in alto, accanto al logo) e cliccandola si vedono le novità.
 
+## V4.7.2 — 25/11/2026
+- Icona dedicata di OnAir (microfono al neon, onde sonore, spia rossa) al posto del logo GPverse generico; sorgente in assets/icon.svg. Il marchio GPverse resta nell'app.
+
 ## V4.7.1 — 24/11/2026
 - Teleprompter in finestra staccata: scorre sempre, anche se nella regia era stato nascosto col pulsante «Teleprompter» (che ora porta in primo piano la finestra).
 

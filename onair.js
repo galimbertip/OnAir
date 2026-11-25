@@ -1,11 +1,14 @@
 /* GPverse OnAir — studio di registrazione per podcast
+ * Un'app GPverse. Icona dedicata: assets/icon.svg (il marchio GPverse resta nell'app: logo in alto e piè di pagina)
  * Versione: vedi APP.version e CHANGELOG.md (schema V.maior.minor.patch)
  */
 'use strict';
 
-const APP = { name: 'GPverse OnAir', version: '4.7.1' };
+const APP = { name: 'GPverse OnAir', version: '4.7.2' };
 
 const CHANGELOG = [
+  { v: '4.7.2', date: '25/11/2026', title: 'Icona tutta sua', items: [
+    'OnAir ha un\'icona dedicata (microfono al neon con le onde e la spia rossa di registrazione) invece del logo GPverse generico: sul desktop e nella barra si distingue dalle altre app. Il marchio GPverse resta dentro l\'app.' ] },
   { v: '4.7.1', date: '24/11/2026', title: 'Teleprompter staccato che non scorreva', items: [
     'Se il teleprompter era in una finestra staccata e nella regia era stato nascosto col pulsante «Teleprompter», si vedeva ma non scorreva (in nessuna modalità). Ora in una finestra staccata scorre sempre.',
     'Il pulsante «Teleprompter» della regia, quando il teleprompter è staccato, porta in primo piano la sua finestra invece di spegnerlo.' ] },
